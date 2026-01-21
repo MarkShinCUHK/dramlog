@@ -26,11 +26,23 @@ npm run dev
 # 브라우저에서 http://localhost:5173 열기
 ```
 
+### 로컬 네트워크(같은 Wi‑Fi)에서 접속하기 (Vite)
+
+다른 기기(휴대폰/태블릿)에서 내 PC의 IP로 접근하려면 dev server를 `--host`로 실행하면 됩니다.
+
+```bash
+# 같은 네트워크에서 내 PC IP로 접속 허용
+npm run dev -- --host
+```
+
+- **접속**: `http://<내PC의-로컬-IP>:5173`
+- **주의**: 개발 서버를 외부에 노출하는 것이므로, 공용 네트워크에서는 사용하지 않는 것을 권장합니다.
+
 ### Supabase 설정
 
 1. [Supabase 대시보드](https://app.supabase.com)에서 프로젝트 생성
 2. 프로젝트 URL과 Anon Key 확인 (Settings → API)
-3. SQL Editor에서 `supabase-schema.sql` 파일의 내용을 실행하여 `posts` 테이블 생성
+3. SQL Editor에서 `supabase-schema.sql` 파일의 내용을 실행하여 테이블 생성 (`posts`, `comments`, `likes`)
 4. RLS (Row Level Security)는 MVP 단계에서 비활성화 (테이블 생성 SQL에 포함됨)
 5. `.env` 파일에 환경 변수 설정 (위 참조)
 
@@ -53,14 +65,23 @@ dramlog/
 │   │   ├── components/          # 재사용 컴포넌트
 │   │   │   ├── Header.svelte
 │   │   │   ├── Footer.svelte
-│   │   │   └── PostCard.svelte
+│   │   │   ├── PostCard.svelte
+│   │   │   ├── SearchBar.svelte
+│   │   │   ├── Pagination.svelte
+│   │   │   ├── Skeleton.svelte
+│   │   │   ├── LikeButton.svelte
+│   │   │   ├── CommentForm.svelte
+│   │   │   ├── CommentList.svelte
+│   │   │   └── CommentItem.svelte
 │   │   └── server/              # 서버 전용 코드
 │   │       └── supabase/
 │   │           ├── client.ts   # Supabase 클라이언트 생성
 │   │           ├── auth.ts     # 인증(쿠키 세션) 헬퍼
 │   │           ├── types.ts     # 타입 정의
 │   │           └── queries/
-│   │               └── posts.ts # 게시글 쿼리 함수
+│   │               ├── posts.ts    # 게시글 쿼리 함수
+│   │               ├── comments.ts # 댓글 쿼리 함수
+│   │               └── likes.ts    # 좋아요 쿼리 함수
 │   ├── routes/
 │   │   ├── +layout.svelte       # 공통 레이아웃
 │   │   ├── +layout.server.ts    # 전역 세션 로드 (Header에서 사용)
@@ -69,6 +90,8 @@ dramlog/
 │   │   ├── signup/              # 회원가입
 │   │   ├── logout/              # 로그아웃
 │   │   ├── my-posts/            # 내 글 목록
+│   │   ├── search/              # 검색 결과
+│   │   ├── contact/             # 문의
 │   │   ├── posts/               # 게시글 관련 페이지
 │   │   │   ├── +page.svelte     # 게시글 리스트
 │   │   │   └── [id]/

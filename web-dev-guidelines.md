@@ -846,4 +846,4 @@ CREATE TABLE posts (
 
 ---
 
-**마지막 업데이트**: 2026-01-21 (MVP 6: 모던 UI 리프레시 완료, 반응형/로딩/에러 처리 진행 예정)
+**마지막 업데이트**: 2026-01-22 (README/.cursorrules/web-dev-guidelines 정합성 업데이트)
