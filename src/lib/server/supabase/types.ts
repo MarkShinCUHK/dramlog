@@ -25,7 +25,44 @@ export type Post = {
   content: string;
   author: string;
   createdAt: string; // YYYY-MM-DD
+  userId?: string | null; // 로그인 글 소유자 (익명 글이면 null)
   excerpt?: string;
   views?: number;
   likes?: number;
+};
+
+/**
+ * Supabase comments 테이블의 row 타입
+ */
+export type CommentRow = {
+  id: string; // UUID
+  post_id: string; // UUID
+  user_id: string; // UUID
+  content: string;
+  created_at: string; // ISO 8601 timestamptz
+  updated_at: string; // ISO 8601 timestamptz
+};
+
+/**
+ * UI에서 사용하는 Comment 타입
+ */
+export type Comment = {
+  id: string;
+  postId: string;
+  userId: string;
+  content: string;
+  createdAt: string; // YYYY-MM-DD HH:mm
+  updatedAt: string; // YYYY-MM-DD HH:mm
+  authorName?: string; // user_metadata.nickname 또는 email
+  authorEmail?: string;
+};
+
+/**
+ * Supabase likes 테이블의 row 타입
+ */
+export type LikeRow = {
+  id: string; // UUID
+  post_id: string; // UUID
+  user_id: string; // UUID
+  created_at: string; // ISO 8601 timestamptz
 };

@@ -38,11 +38,39 @@ ALTER TABLE posts
 CREATE INDEX IF NOT EXISTS idx_posts_created_at ON posts(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_posts_author_name ON posts(author_name);
 
+-- comments 테이블 생성 (댓글)
+CREATE TABLE IF NOT EXISTS comments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL, -- auth.users 참조 (FK는 선택사항)
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- likes 테이블 생성 (좋아요)
+CREATE TABLE IF NOT EXISTS likes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL, -- auth.users 참조 (FK는 선택사항)
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(post_id, user_id) -- 중복 좋아요 방지
+);
+
+-- 인덱스 생성
+CREATE INDEX IF NOT EXISTS idx_comments_post_id ON comments(post_id);
+CREATE INDEX IF NOT EXISTS idx_comments_created_at ON comments(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_comments_user_id ON comments(user_id);
+CREATE INDEX IF NOT EXISTS idx_likes_post_id ON likes(post_id);
+CREATE INDEX IF NOT EXISTS idx_likes_user_id ON likes(user_id);
+
 -- RLS (Row Level Security) 설정
 -- 
 -- MVP 단계: RLS 비활성화 (모든 사용자가 읽기/쓰기 가능)
 -- 아래 명령어로 RLS를 비활성화합니다:
 ALTER TABLE posts DISABLE ROW LEVEL SECURITY;
+ALTER TABLE comments DISABLE ROW LEVEL SECURITY;
+ALTER TABLE likes DISABLE ROW LEVEL SECURITY;
 --
 -- 프로덕션 단계: RLS 활성화 및 정책 설정
 -- 1. RLS 활성화:

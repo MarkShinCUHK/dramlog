@@ -18,6 +18,9 @@
   - 로그인 사용자: 닉네임 자동 적용, 비밀번호 입력 불필요, `user_id`로 수정/삭제
   - 익명 사용자: 작성자 선택 입력, 비밀번호 필수, 비밀번호로 수정/삭제
   - 같은 페이지/라우트에서 조건부 렌더링과 서버 로직 분기로 구현
+  - **권한 정책(강제)**:
+    - 로그인 글(`user_id` 존재): 작성자 본인만 수정/삭제 가능 (비밀번호 입력 없음)
+    - 익명 글(`user_id` 없음): **로그아웃 상태에서만** 비밀번호로 수정/삭제 가능 (로그인 상태에서는 수정/삭제 불가)
 
 ## 코딩 스타일
 - 들여쓰기: 2 spaces
@@ -117,8 +120,8 @@ src/
    - 같은 페이지(`/write`)에서 로그인 여부에 따라 UI/로직 자동 분기
    - 게스트 글 Claim 기능 없음 (익명 글은 계속 익명 소유)
 
-### MVP 5단계: 핵심 기능 강화
-1. **검색 기능**
+### MVP 5단계: 핵심 기능 강화 (완료 ✅)
+1. ✅ **검색 기능**
    - **파일 구조**:
      ```
      src/
@@ -134,13 +137,20 @@ src/
      │   └── components/
      │       └── SearchBar.svelte (검색바 컴포넌트)
      ```
-   - **구현 세부사항**:
-     - 검색바 컴포넌트: Header에 통합 또는 독립 컴포넌트
-     - 검색 쿼리 함수: `searchPosts(query: string)` - Supabase `ilike` 또는 `textSearch` 사용
-     - 검색 결과 페이지: 쿼리 파라미터 `q` 읽기, 결과 목록 표시
-     - DB 최적화: `posts` 테이블에 `title`, `content` 컬럼에 GIN 인덱스 추가 (Full-text search)
+   - ✅ **구현 완료**:
+     - 검색바 컴포넌트: Header에 통합 (데스크톱/모바일 반응형)
+     - 검색 쿼리 함수: `searchPosts(query, { limit, offset })` - Supabase `ilike` 사용
+     - 검색 결과 페이지: 쿼리 파라미터 `q` 읽기, 결과 목록 표시, 페이지네이션 지원
+     - 검색 개수 조회: `getSearchPostCount(query)` 함수 추가
 
-2. **댓글 시스템**
+2. ✅ **페이지네이션** (12개/페이지)
+   - ✅ **구현 완료**:
+     - `/posts`, `/my-posts`, `/search`에 페이지네이션 적용
+     - 쿼리 함수: `listPosts(limit, offset)`, `getPostCount()`, `getMyPosts(userId, limit, offset)`, `getMyPostCount(userId)`
+     - UI 컴포넌트: `Pagination.svelte` (이전/다음, 페이지 번호)
+     - 서버 로드: `page` 파라미터 파싱, `limit/offset` 계산, `totalPages` 계산
+
+3. ✅ **댓글 시스템** (로그인 사용자 전용)
    - **파일 구조**:
      ```
      src/
@@ -159,25 +169,15 @@ src/
      │       ├── CommentForm.svelte (댓글 작성 폼)
      │       └── CommentItem.svelte (댓글 아이템)
      ```
-   - **데이터베이스 스키마**:
-     ```sql
-     CREATE TABLE comments (
-       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-       post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-       user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-       content TEXT NOT NULL,
-       created_at TIMESTAMPTZ DEFAULT NOW(),
-       updated_at TIMESTAMPTZ DEFAULT NOW()
-     );
-     CREATE INDEX idx_comments_post_id ON comments(post_id);
-     CREATE INDEX idx_comments_created_at ON comments(created_at DESC);
-     ```
-   - **구현 세부사항**:
-     - 댓글 쿼리 함수: `listComments()`, `createComment()`, `updateComment()`, `deleteComment()`
-     - 댓글 컴포넌트: 목록 표시, 작성 폼, 개별 댓글 아이템
-     - 게시글 상세 페이지에 댓글 섹션 추가
+   - ✅ **데이터베이스 스키마**: `comments` 테이블 생성 완료 (인덱스 포함)
+   - ✅ **구현 완료**:
+     - 댓글 쿼리 함수: `listComments()`, `createComment()`, `updateComment()`, `deleteComment()` (`src/lib/server/supabase/queries/comments.ts`)
+     - 댓글 컴포넌트: `CommentList.svelte`, `CommentForm.svelte`, `CommentItem.svelte`
+     - 게시글 상세 페이지(`/posts/[id]`)에 댓글 섹션 통합
+     - 로그인 사용자만 댓글 작성/수정/삭제 가능
+     - 본인 댓글만 수정/삭제 가능
 
-3. **좋아요 기능**
+4. ✅ **좋아요 기능** (로그인 사용자 전용)
    - **파일 구조**:
      ```
      src/
@@ -190,25 +190,23 @@ src/
      │   └── components/
      │       └── LikeButton.svelte (좋아요 버튼)
      ```
-   - **데이터베이스 스키마**:
-     ```sql
-     CREATE TABLE likes (
-       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-       post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-       user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-       created_at TIMESTAMPTZ DEFAULT NOW(),
-       UNIQUE(post_id, user_id) -- 중복 좋아요 방지
-     );
-     CREATE INDEX idx_likes_post_id ON likes(post_id);
-     CREATE INDEX idx_likes_user_id ON likes(user_id);
-     ```
-   - **구현 세부사항**:
-     - 좋아요 쿼리 함수: `getLikeCount()`, `isLiked()`, `toggleLike()`
+   - ✅ **데이터베이스 스키마**: `likes` 테이블 생성 완료 (UNIQUE 제약조건, 인덱스 포함)
+   - ✅ **구현 완료**:
+     - 좋아요 쿼리 함수: `getLikeCount()`, `isLiked()`, `toggleLike()` (`src/lib/server/supabase/queries/likes.ts`)
      - LikeButton 컴포넌트: 하트 아이콘, 좋아요 개수 표시, 클릭 시 토글
-     - 게시글 상세 페이지에 LikeButton 컴포넌트 추가
+     - 게시글 상세 페이지(`/posts/[id]`)에 LikeButton 컴포넌트 통합
+     - 로그인 사용자만 좋아요 가능
 
-### MVP 6단계: UI/UX 개선
-1. **반응형 디자인**
+### MVP 6단계: UI/UX 개선 (진행 중 🔄)
+1. ✅ **모던 UI 리프레시** (완료)
+   - ✅ 헤더: 라이트 톤 + 반투명 + backdrop-blur 스타일 (sticky, 글씨 가독성 개선)
+   - ✅ 배경: 위스키 계열 그라데이션 + 노이즈 패턴 (`+layout.svelte`)
+   - ✅ 전역 스타일: 폰트 렌더링, 포커스 링, 선택 색상 통일 (`app.css`)
+   - ✅ 메인 페이지 정리: 게시글 목록/작성만 남기고 문의 카드 추가
+   - ✅ 문의 페이지 추가: `/contact` 라우트 생성
+   - ✅ 푸터: 밝은 반투명 톤으로 통일
+
+2. 🔄 **반응형 디자인 세부 개선** (진행 예정)
    - **모바일 최적화** (< 640px):
      - Header: 햄버거 메뉴 또는 간소화된 네비게이션
      - 게시글 목록: 단일 컬럼, 카드 레이아웃
@@ -271,6 +269,9 @@ src/
    - 진행 중인 작업은 🔄 표시
    - 예정된 작업은 명확히 구분
 
+## UX 규칙 (상호작용)
+- 좋아요/댓글 같은 “작은 액션”은 가능하면 **redirect 없이 `use:enhance`로 즉시 반영** (낙관적 업데이트 + 실패 시 롤백)
+
 ## Supabase 관련 규칙
 - **환경 변수**: `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY` 사용
 - **RLS (Row Level Security)**: MVP 단계에서는 비활성화하여 insert 가능하도록 설정
@@ -280,4 +281,4 @@ src/
 
 ## 추가 참조
 - 상세 가이드라인: `web-dev-guidelines.md` 참조
-- 마지막 업데이트: 2026-01-21 (MVP 4: 로그인 사용자 글 작성 완료, 익명/로그인 구분 개발 규칙 추가)
+- 마지막 업데이트: 2026-01-21 (MVP 6: 모던 UI 리프레시 완료, 반응형/로딩/에러 처리 진행 예정)

@@ -50,6 +50,7 @@ function mapRowToPost(row: PostRow): Post {
     content: row.content,
     author: row.author_name || DEFAULT_AUTHOR_NAME,
     createdAt: dateStr,
+    userId: row.user_id ?? null,
     // 선택적 필드들 안전하게 처리
     likes: row.like_count ?? undefined,
     views: undefined, // 현재 스키마에 없음
@@ -59,7 +60,7 @@ function mapRowToPost(row: PostRow): Post {
 /**
  * 게시글 목록 조회 (최신순)
  */
-export async function listPosts(limit?: number): Promise<Post[]> {
+export async function listPosts(limit?: number, offset?: number): Promise<Post[]> {
   try {
     const supabase = createSupabaseClient();
     
@@ -68,7 +69,9 @@ export async function listPosts(limit?: number): Promise<Post[]> {
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (limit && limit > 0) {
+    if (typeof offset === 'number' && offset >= 0 && limit && limit > 0) {
+      query = query.range(offset, offset + limit - 1);
+    } else if (limit && limit > 0) {
       query = query.limit(limit);
     }
 
@@ -88,6 +91,86 @@ export async function listPosts(limit?: number): Promise<Post[]> {
     console.error('게시글 목록 조회 오류:', error);
     // 에러 발생 시 빈 배열 반환 (UI가 깨지지 않도록)
     return [];
+  }
+}
+
+/**
+ * 게시글 전체 개수 조회
+ */
+export async function getPostCount(): Promise<number> {
+  try {
+    const supabase = createSupabaseClient();
+    const { count, error } = await supabase
+      .from('posts')
+      .select('*', { count: 'exact', head: true });
+
+    if (error) {
+      console.error('게시글 개수 조회 오류:', error);
+      return 0;
+    }
+    return count ?? 0;
+  } catch (error) {
+    console.error('게시글 개수 조회 오류:', error);
+    return 0;
+  }
+}
+
+/**
+ * 게시글 검색 (제목/내용)
+ */
+export async function searchPosts(
+  queryText: string,
+  input?: { limit?: number; offset?: number }
+): Promise<Post[]> {
+  try {
+    const q = queryText.trim();
+    if (!q) return [];
+
+    const supabase = createSupabaseClient();
+    let query = supabase
+      .from('posts')
+      .select('*')
+      .or(`title.ilike.%${q}%,content.ilike.%${q}%`)
+      .order('created_at', { ascending: false });
+
+    if (input?.offset && input.offset > 0) {
+      query = query.range(input.offset, input.offset + (input.limit ?? 12) - 1);
+    } else if (input?.limit && input.limit > 0) {
+      query = query.limit(input.limit);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.error('게시글 검색 오류:', error);
+      throw error;
+    }
+    if (!data || data.length === 0) return [];
+    return data.map(mapRowToPost);
+  } catch (error) {
+    console.error('게시글 검색 오류:', error);
+    return [];
+  }
+}
+
+export async function getSearchPostCount(queryText: string): Promise<number> {
+  try {
+    const q = queryText.trim();
+    if (!q) return 0;
+
+    const supabase = createSupabaseClient();
+    const { count, error } = await supabase
+      .from('posts')
+      .select('*', { count: 'exact', head: true })
+      .or(`title.ilike.%${q}%,content.ilike.%${q}%`);
+
+    if (error) {
+      console.error('검색 개수 조회 오류:', error);
+      return 0;
+    }
+    return count ?? 0;
+  } catch (error) {
+    console.error('검색 개수 조회 오류:', error);
+    return 0;
   }
 }
 
@@ -180,7 +263,7 @@ export async function createPost(input: {
 /**
  * 로그인 사용자의 게시글 목록 조회
  */
-export async function getMyPosts(userId: string, limit?: number): Promise<Post[]> {
+export async function getMyPosts(userId: string, limit?: number, offset?: number): Promise<Post[]> {
   try {
     const supabase = createSupabaseClient();
 
@@ -190,7 +273,9 @@ export async function getMyPosts(userId: string, limit?: number): Promise<Post[]
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
-    if (limit && limit > 0) {
+    if (typeof offset === 'number' && offset >= 0 && limit && limit > 0) {
+      query = query.range(offset, offset + limit - 1);
+    } else if (limit && limit > 0) {
       query = query.limit(limit);
     }
 
@@ -206,6 +291,25 @@ export async function getMyPosts(userId: string, limit?: number): Promise<Post[]
   } catch (error) {
     console.error('내 게시글 목록 조회 오류:', error);
     return [];
+  }
+}
+
+export async function getMyPostCount(userId: string): Promise<number> {
+  try {
+    const supabase = createSupabaseClient();
+    const { count, error } = await supabase
+      .from('posts')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('내 게시글 개수 조회 오류:', error);
+      return 0;
+    }
+    return count ?? 0;
+  } catch (error) {
+    console.error('내 게시글 개수 조회 오류:', error);
+    return 0;
   }
 }
 

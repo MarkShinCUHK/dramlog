@@ -1,8 +1,10 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { getPostById, deletePost } from '$lib/server/supabase/queries/posts';
 import { getUser } from '$lib/server/supabase/auth';
+import { listComments } from '$lib/server/supabase/queries/comments';
+import { getLikeCount, isLiked } from '$lib/server/supabase/queries/likes';
 
-export async function load({ params }) {
+export async function load({ params, cookies }) {
   try {
     const postId = params.id; // UUID (string)
 
@@ -16,10 +18,31 @@ export async function load({ params }) {
       throw error(404, '게시글을 찾을 수 없습니다');
     }
 
+    // 댓글과 좋아요 정보 로드
+    const user = await getUser(cookies);
+    const [comments, likeCount, userLiked] = await Promise.all([
+      listComments(postId),
+      getLikeCount(postId),
+      user ? isLiked(postId, user.id) : Promise.resolve(false)
+    ]);
+
+    const isAnonymousPost = !post.userId;
+    const isOwner = !!user && !!post.userId && user.id === post.userId;
+    // 정책:
+    // - 익명 글: "비로그인 상태"에서만 비밀번호로 수정/삭제 가능
+    // - 로그인 글: 작성자만(비밀번호 없이) 수정/삭제 가능
+    const canEditDelete = isOwner || (isAnonymousPost && !user);
+    const needsEditPassword = isAnonymousPost && !user;
+
     // 조회수 증가는 MVP 단계에서 제외 (필요시 추후 추가)
 
     return {
-      post
+      post,
+      comments,
+      likeCount,
+      isLiked: userLiked,
+      canEditDelete,
+      needsEditPassword
     };
   } catch (err) {
     // SvelteKit error는 그대로 전달
@@ -32,6 +55,113 @@ export async function load({ params }) {
 }
 
 export const actions = {
+  createComment: async ({ request, params, cookies }) => {
+    try {
+      const postId = params.id;
+      const user = await getUser(cookies);
+
+      if (!user) {
+        return fail(401, {
+          error: '로그인이 필요합니다.'
+        });
+      }
+
+      if (!postId) {
+        return fail(400, {
+          error: '게시글 ID가 없습니다.'
+        });
+      }
+
+      const formData = await request.formData();
+      const content = formData.get('content')?.toString();
+
+      if (!content || content.trim().length === 0) {
+        return fail(400, {
+          error: '댓글 내용을 입력해주세요.'
+        });
+      }
+
+      const { createComment } = await import('$lib/server/supabase/queries/comments');
+      const comment = await createComment(postId, content, user.id);
+
+      // redirect 대신 데이터 반환 (use:enhance로 즉시 반영)
+      return { comment };
+    } catch (err) {
+      if (err && typeof err === 'object' && 'status' in err) {
+        throw err;
+      }
+      console.error('댓글 작성 오류:', err);
+      return fail(500, {
+        error: '댓글 작성 중 오류가 발생했습니다.'
+      });
+    }
+  },
+  deleteComment: async ({ request, params, cookies }) => {
+    try {
+      const user = await getUser(cookies);
+
+      if (!user) {
+        return fail(401, {
+          error: '로그인이 필요합니다.'
+        });
+      }
+
+      const formData = await request.formData();
+      const commentId = formData.get('commentId')?.toString();
+
+      if (!commentId) {
+        return fail(400, {
+          error: '댓글 ID가 없습니다.'
+        });
+      }
+
+      const { deleteComment } = await import('$lib/server/supabase/queries/comments');
+      await deleteComment(commentId, user.id);
+
+      return { deletedId: commentId };
+    } catch (err) {
+      if (err && typeof err === 'object' && 'status' in err) {
+        throw err;
+      }
+      console.error('댓글 삭제 오류:', err);
+      return fail(500, {
+        error: err instanceof Error ? err.message : '댓글 삭제 중 오류가 발생했습니다.'
+      });
+    }
+  },
+  toggleLike: async ({ request, params, cookies }) => {
+    try {
+      const postId = params.id;
+      const user = await getUser(cookies);
+
+      if (!user) {
+        return fail(401, {
+          error: '로그인이 필요합니다.'
+        });
+      }
+
+      if (!postId) {
+        return fail(400, {
+          error: '게시글 ID가 없습니다.'
+        });
+      }
+
+      const { toggleLike, getLikeCount, isLiked } = await import('$lib/server/supabase/queries/likes');
+      await toggleLike(postId, user.id);
+      const [likeCount, liked] = await Promise.all([getLikeCount(postId), isLiked(postId, user.id)]);
+
+      // redirect 대신 데이터만 반환 (use:enhance로 빠른 UI 업데이트)
+      return { likeCount, isLiked: liked };
+    } catch (err) {
+      if (err && typeof err === 'object' && 'status' in err) {
+        throw err;
+      }
+      console.error('좋아요 토글 오류:', err);
+      return fail(500, {
+        error: '좋아요 처리 중 오류가 발생했습니다.'
+      });
+    }
+  },
   delete: async ({ request, params, cookies }) => {
     try {
       const postId = params.id;
@@ -42,12 +172,27 @@ export const actions = {
         });
       }
 
+      const post = await getPostById(postId);
+      if (!post) {
+        return fail(404, { error: '게시글을 찾을 수 없습니다.' });
+      }
+
       const formData = await request.formData();
       const editPassword = formData.get('editPassword')?.toString();
       const user = await getUser(cookies);
-      const isLoggedIn = !!user;
+      const isAnonymousPost = !post.userId;
+      const isOwner = !!user && !!post.userId && user.id === post.userId;
 
-      if (!isLoggedIn && !editPassword) {
+      // 로그인 글: 작성자만 삭제 가능 (비밀번호 없음)
+      if (!isAnonymousPost && !isOwner) {
+        return fail(403, { error: '본인의 게시글만 삭제할 수 있습니다.' });
+      }
+
+      // 익명 글: "비로그인 상태"에서만 비밀번호로 삭제 가능
+      if (isAnonymousPost && user) {
+        return fail(403, { error: '익명 게시글은 로그아웃 상태에서 비밀번호로만 삭제할 수 있습니다.' });
+      }
+      if (isAnonymousPost && !editPassword) {
         return fail(400, {
           error: '비밀번호를 입력해주세요.'
         });
@@ -55,8 +200,8 @@ export const actions = {
 
       // 게시글 삭제
       await deletePost(postId, {
-        userId: user?.id ?? null,
-        editPassword: isLoggedIn ? undefined : editPassword
+        userId: isAnonymousPost ? null : (user?.id ?? null),
+        editPassword: isAnonymousPost ? editPassword : undefined
       });
 
       // 게시글 목록으로 리다이렉트

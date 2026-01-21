@@ -20,18 +20,18 @@
   <title>로그인 - DramLog</title>
 </svelte:head>
 
-<div class="max-w-md mx-auto px-4 py-10">
-  <h1 class="text-3xl font-bold text-whiskey-900 mb-6">로그인</h1>
+<div class="max-w-md mx-auto px-4 py-12">
+  <h1 class="text-4xl sm:text-5xl font-bold text-whiskey-900 mb-10 tracking-tight text-center">로그인</h1>
 
-  <form method="POST" use:enhance class="bg-white rounded-lg shadow-md p-8 border border-gray-100">
+  <form method="POST" use:enhance class="rounded-2xl bg-white/80 backdrop-blur-sm p-8 sm:p-10 ring-1 ring-black/5 shadow-sm">
     {#if successMessage}
-      <div class="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">
+      <div class="mb-6 p-4 bg-green-50/80 border border-green-200/50 rounded-lg text-green-700 text-sm">
         {successMessage}
       </div>
     {/if}
     
     {#if error}
-      <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+      <div class="mb-6 p-4 bg-red-50/80 border border-red-200/50 rounded-lg text-red-700 text-sm">
         {error}
       </div>
     {/if}
@@ -44,7 +44,7 @@
         type="email"
         bind:value={email}
         required
-        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-whiskey-500 focus:border-whiskey-500 outline-none"
+        class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-whiskey-500 focus:border-whiskey-500 outline-none transition-colors"
         placeholder="you@example.com"
       />
     </div>
@@ -57,14 +57,14 @@
         type="password"
         bind:value={password}
         required
-        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-whiskey-500 focus:border-whiskey-500 outline-none"
+        class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-whiskey-500 focus:border-whiskey-500 outline-none transition-colors"
         placeholder="비밀번호"
       />
     </div>
 
     <button
       type="submit"
-      class="w-full px-6 py-3 bg-whiskey-600 text-white rounded-lg hover:bg-whiskey-700 transition-colors font-medium"
+      class="w-full px-6 py-3 bg-whiskey-600 text-white rounded-lg hover:bg-whiskey-700 transition-colors font-medium shadow-sm hover:shadow-md"
     >
       로그인
     </button>
