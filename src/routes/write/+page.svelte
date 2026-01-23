@@ -122,7 +122,7 @@
 </svelte:head>
 
 <div class="max-w-4xl xl:max-w-5xl mx-auto px-4 xl:px-8 py-12">
-  <h1 class="text-4xl sm:text-5xl font-bold text-whiskey-900 mb-10 tracking-tight">글 작성</h1>
+  <h1 class="text-3xl sm:text-4xl font-bold text-whiskey-900 mb-10 tracking-tight">글 작성</h1>
 
   <form
     method="POST"

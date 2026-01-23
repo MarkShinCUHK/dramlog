@@ -1,6 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { getPostById, deletePost } from '$lib/server/supabase/queries/posts';
-import { getUser } from '$lib/server/supabase/auth';
+import { getUser, getSession, getUserOrCreateAnonymous } from '$lib/server/supabase/auth';
 import { listComments } from '$lib/server/supabase/queries/comments';
 import { getLikeCount, isLiked } from '$lib/server/supabase/queries/likes';
 
@@ -18,6 +18,9 @@ export async function load({ params, cookies }) {
       throw error(404, '게시글을 찾을 수 없습니다');
     }
 
+    // 익명 글 판단: post.isAnonymous 사용
+    const isAnonymousPost = post.isAnonymous ?? false;
+
     // 댓글과 좋아요 정보 로드
     const user = await getUser(cookies);
     const [comments, likeCount, userLiked] = await Promise.all([
@@ -26,13 +29,16 @@ export async function load({ params, cookies }) {
       user ? isLiked(postId, user.id) : Promise.resolve(false)
     ]);
 
-    const isAnonymousPost = !post.userId;
-    const isOwner = !!user && !!post.userId && user.id === post.userId;
     // 정책:
-    // - 익명 글: "비로그인 상태"에서만 비밀번호로 수정/삭제 가능
-    // - 로그인 글: 작성자만(비밀번호 없이) 수정/삭제 가능
-    const canEditDelete = isOwner || (isAnonymousPost && !user);
-    const needsEditPassword = isAnonymousPost && !user;
+    // - 로그인 글: 작성자 본인만 수정/삭제 가능 (비밀번호 없음)
+    // - 익명 글: 항상 비밀번호로만 수정/삭제 가능 (다른 컴퓨터에서도 비밀번호로 수정/삭제 가능)
+    //   단, 로그인 상태에서는 익명 글 수정/삭제 불가 (익명 글은 비로그인 상태에서만)
+    const isOwner = !!user && !!post.userId && user.id === post.userId;
+    const isLoggedInPost = !isAnonymousPost && isOwner;
+    
+    // 익명 글은 로그인 사용자가 아닌 경우만 수정/삭제 가능 (항상 비밀번호 필요)
+    const canEditDelete = isLoggedInPost || (isAnonymousPost && (!user || !user.email));
+    const needsEditPassword = isAnonymousPost && (!user || !user.email);
 
     // 조회수 증가는 MVP 단계에서 제외 (필요시 추후 추가)
 
@@ -177,10 +183,12 @@ export const actions = {
         return fail(404, { error: '게시글을 찾을 수 없습니다.' });
       }
 
+      // 익명 글 판단: post.isAnonymous 사용
+      const isAnonymousPost = post.isAnonymous ?? false;
+
       const formData = await request.formData();
       const editPassword = formData.get('editPassword')?.toString();
       const user = await getUser(cookies);
-      const isAnonymousPost = !post.userId;
       const isOwner = !!user && !!post.userId && user.id === post.userId;
 
       // 로그인 글: 작성자만 삭제 가능 (비밀번호 없음)
@@ -189,7 +197,7 @@ export const actions = {
       }
 
       // 익명 글: "비로그인 상태"에서만 비밀번호로 삭제 가능
-      if (isAnonymousPost && user) {
+      if (isAnonymousPost && user && user.email) {
         return fail(403, { error: '익명 게시글은 로그아웃 상태에서 비밀번호로만 삭제할 수 있습니다.' });
       }
       if (isAnonymousPost && !editPassword) {
@@ -198,11 +206,24 @@ export const actions = {
         });
       }
 
+      // 세션 토큰 가져오기 (RLS 정책 적용을 위해)
+      // 익명 글의 경우 세션이 없으면 익명 세션 생성
+      let sessionTokens = getSession(cookies);
+      if (isAnonymousPost && !sessionTokens) {
+        // 익명 글 삭제를 위해 익명 세션 생성
+        const anonymousUser = await getUserOrCreateAnonymous(cookies);
+        sessionTokens = getSession(cookies);
+      }
+
       // 게시글 삭제
-      await deletePost(postId, {
-        userId: isAnonymousPost ? null : (user?.id ?? null),
-        editPassword: isAnonymousPost ? editPassword : undefined
-      });
+      await deletePost(
+        postId,
+        {
+          userId: isAnonymousPost ? null : (user?.id ?? null), // 익명 글은 항상 null
+          editPassword: isAnonymousPost ? editPassword : undefined // 익명 글은 항상 비밀번호 필요
+        },
+        sessionTokens || undefined
+      );
 
       // 게시글 목록으로 리다이렉트
       throw redirect(303, '/posts');
@@ -213,8 +234,9 @@ export const actions = {
       }
 
       console.error('게시글 삭제 오류:', err);
+      const errorMessage = err instanceof Error ? err.message : '게시글 삭제 중 오류가 발생했습니다.';
       return fail(500, {
-        error: '게시글 삭제 중 오류가 발생했습니다.'
+        error: errorMessage
       });
     }
   }

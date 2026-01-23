@@ -42,7 +42,7 @@
       <!-- Mobile Menu Button -->
       <button
         type="button"
-        class="md:hidden p-3 rounded-xl hover:bg-gray-900/5 transition-colors ring-1 ring-black/10"
+        class="md:hidden p-3 min-h-[44px] min-w-[44px] rounded-xl hover:bg-gray-900/5 transition-colors ring-1 ring-black/10"
         on:click={toggleMobileMenu}
         aria-label="메뉴"
       >
@@ -64,14 +64,14 @@
         </div>
         <a
           href="/posts"
-          class="block py-3 px-4 rounded-xl hover:bg-gray-900/5 transition-colors font-medium ring-1 ring-black/10"
+          class="block py-3 min-h-[44px] px-4 rounded-xl hover:bg-gray-900/5 transition-colors font-medium ring-1 ring-black/10"
           on:click={() => (mobileMenuOpen = false)}
         >
           게시글
         </a>
         <a
           href="/write"
-          class="block py-3 px-4 rounded-xl bg-whiskey-500 text-white hover:bg-whiskey-600 transition-colors font-semibold shadow-sm shadow-black/10"
+          class="block py-3 min-h-[44px] px-4 rounded-xl bg-whiskey-500 text-white hover:bg-whiskey-600 transition-colors font-semibold shadow-sm shadow-black/10"
           on:click={() => (mobileMenuOpen = false)}
         >
           작성하기
@@ -79,14 +79,14 @@
         {#if $page.data?.user}
           <a
             href="/my-posts"
-            class="block py-3 px-4 rounded-xl hover:bg-gray-900/5 transition-colors font-medium ring-1 ring-black/10"
+            class="block py-3 min-h-[44px] px-4 rounded-xl hover:bg-gray-900/5 transition-colors font-medium ring-1 ring-black/10"
             on:click={() => (mobileMenuOpen = false)}
           >
             내 글
           </a>
           <a
             href="/logout"
-            class="block py-3 px-4 rounded-xl bg-gray-900/5 hover:bg-gray-900/10 ring-1 ring-black/10 transition-colors font-medium"
+            class="block py-3 min-h-[44px] px-4 rounded-xl bg-gray-900/5 hover:bg-gray-900/10 ring-1 ring-black/10 transition-colors font-medium"
             on:click={() => (mobileMenuOpen = false)}
           >
             로그아웃
@@ -94,14 +94,14 @@
         {:else}
           <a
             href="/login"
-            class="block py-3 px-4 rounded-xl hover:bg-gray-900/5 transition-colors font-medium ring-1 ring-black/10"
+            class="block py-3 min-h-[44px] px-4 rounded-xl hover:bg-gray-900/5 transition-colors font-medium ring-1 ring-black/10"
             on:click={() => (mobileMenuOpen = false)}
           >
             로그인
           </a>
           <a
             href="/signup"
-            class="block py-3 px-4 rounded-xl bg-gray-900/5 hover:bg-gray-900/10 ring-1 ring-black/10 transition-colors font-medium"
+            class="block py-3 min-h-[44px] px-4 rounded-xl bg-gray-900/5 hover:bg-gray-900/10 ring-1 ring-black/10 transition-colors font-medium"
             on:click={() => (mobileMenuOpen = false)}
           >
             회원가입

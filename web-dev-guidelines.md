@@ -665,29 +665,41 @@ Tailwind 기본 간격 사용:
 
 2. **사용자 경험 개선**
    - **로딩 상태**:
-     - **스켈레톤 UI 컴포넌트** (`src/lib/components/Skeleton.svelte`):
-       - 게시글 목록 로딩 시 스켈레톤 표시
-       - Tailwind 애니메이션 활용
+     - ✅ **스켈레톤 UI 컴포넌트** (`src/lib/components/Skeleton.svelte`) - 구현 완료:
+       - 게시글 목록 로딩 시 스켈레톤 표시 (`/posts`, `/search` 페이지에서 `$navigating` 사용)
+       - Tailwind 애니메이션 활용 (`animate-pulse`)
      - **SvelteKit `{#await}` 블록 활용**:
        - 비동기 데이터 로딩 상태 표시
        - 에러 상태 처리
    - **에러 처리**:
-     - **에러 페이지 개선** (`src/routes/+error.svelte`):
+     - ✅ **에러 페이지 개선** (`src/routes/+error.svelte`):
        - 친화적인 에러 메시지
        - 홈으로 돌아가기 버튼
-       - 에러 코드별 메시지 (404, 500 등)
-     - **폼 에러 처리**:
-       - 실시간 유효성 검사
-       - 필드별 에러 메시지 표시
-       - 서버 에러 메시지 표시
+       - 에러 코드별 메시지 (404, 403, 500 등)
+     - ✅ **폼 에러 처리**:
+       - ✅ 실시간 유효성 검사 (`on:input`, `on:blur` 이벤트)
+       - ✅ 필드별 에러 메시지 표시 (`clientFieldErrors`, `fieldErrors` 병합)
+       - ✅ 서버 에러 메시지 표시
+       - ✅ `touchedFields` 패턴: 필드가 blur되거나 입력이 시작된 경우에만 에러 표시
+       - ✅ Svelte 반응성 보장: `clientFieldErrors` 객체 수정 시 재할당 필수
+         ```javascript
+         // ✅ 올바른 예
+         clientFieldErrors = { ...clientFieldErrors };
+         delete clientFieldErrors.title;
+         ```
+   - **브라우저 자동완성 방지**:
+     - ✅ `autocomplete` 속성 추가:
+       - `excerpt` 필드: `autocomplete="off"`
+       - `editPassword` 필드: `autocomplete="new-password"`
+       - `editPasswordConfirm` 필드: `autocomplete="new-password"`
+       - 수정 페이지 비밀번호: `autocomplete="current-password"`
    - **피드백**:
-     - **토스트 알림 시스템** (선택사항):
-       - 성공/에러 메시지 표시
-       - 자동 사라짐 (3-5초)
-       - 컴포넌트: `Toast.svelte`, `ToastContainer.svelte`
-     - **성공 피드백**:
-       - 글 작성/수정/삭제 성공 시 메시지
-       - 댓글 작성 성공 시 메시지
+     - ✅ **토스트 알림 시스템**:
+       - ✅ 성공/에러 메시지 표시 (`Toast.svelte`, `ToastContainer.svelte`)
+       - ✅ 자동 사라짐 (5초)
+       - ✅ Svelte store 기반 (`src/lib/stores/toast.ts`)
+       - ✅ `showToast(message, type)` 함수로 간편 사용
+       - ✅ 글 작성/수정/삭제 성공 시 토스트 메시지 표시
    - **페이지네이션**:
      - **게시글 목록 페이지네이션**:
        - 페이지당 게시글 수 제한 (예: 10개)
@@ -780,34 +792,14 @@ Tailwind 기본 간격 사용:
 
 ### RLS (Row Level Security) 설정
 
-#### MVP 단계 (현재)
-- **RLS 비활성화**: 모든 사용자가 읽기/쓰기 가능
-- **설정 방법**: Supabase 대시보드 → Authentication → Policies
-- **또는 SQL로**:
-  ```sql
-  ALTER TABLE posts DISABLE ROW LEVEL SECURITY;
-  ```
-
-#### 프로덕션 단계 (향후)
-- **RLS 활성화**: 보안 정책 설정 필수
-- **읽기 정책**: 모든 사용자 읽기 가능
-- **쓰기 정책**: 인증된 사용자만 작성 가능
-- **수정/삭제 정책**: 작성자만 가능
-- **예시 정책**:
-  ```sql
-  -- RLS 활성화
-  ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
-  
-  -- 읽기 정책
-  CREATE POLICY "Anyone can read posts"
-  ON posts FOR SELECT
-  USING (true);
-  
-  -- 쓰기 정책 (인증된 사용자만)
-  CREATE POLICY "Authenticated users can insert posts"
-  ON posts FOR INSERT
-  WITH CHECK (auth.role() = 'authenticated');
-  ```
+#### 프로덕션 단계 (완료 ✅)
+- ✅ **RLS 활성화**: 보안 정책 설정 완료
+- ✅ **읽기 정책**: 모든 사용자 읽기 가능
+- ✅ **쓰기 정책**: 인증된 사용자(익명 포함)만 작성 가능
+- ✅ **수정/삭제 정책**: 작성자만 가능 (`auth.uid() = user_id`)
+- ✅ **Anonymous Auth**: 익명 사용자도 세션을 가지도록 구현
+- ✅ **세션 토큰 기반 클라이언트**: `createSupabaseClientWithSession()` 함수로 RLS 정책 적용
+- ✅ **익명 글 관리**: `is_anonymous` 컬럼으로 익명 글 명확히 식별
 
 ### Supabase 스키마 구조
 
@@ -869,4 +861,4 @@ CREATE TABLE posts (
 
 ---
 
-**마지막 업데이트**: 2026-01-22 (Vercel 배포 반영: Node 20, 환경변수, Supabase Auth URL)
+**마지막 업데이트**: 2026-01-22 (익명 사용자 회원가입 시 글 전환 기능 완료, RLS 정책 개선)

@@ -2,6 +2,7 @@
   import { enhance } from '$app/forms';
   import { page } from '$app/stores';
   import { createEventDispatcher } from 'svelte';
+  import { showToast } from '$lib/stores/toast';
   
   export let form;
   
@@ -25,12 +26,15 @@
         if (created) dispatch('created', created);
         content = '';
         error = '';
+        showToast('댓글이 작성되었습니다.', 'success');
         return;
       }
 
       // 실패 시 내용 복구 (사용자 입력 보호)
       content = prev;
-      error = '댓글 작성에 실패했습니다.';
+      const errorMessage = result.data?.error || '댓글 작성에 실패했습니다.';
+      error = errorMessage;
+      showToast(errorMessage, 'error');
     };
   }
 </script>

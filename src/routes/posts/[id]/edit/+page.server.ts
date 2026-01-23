@@ -1,8 +1,9 @@
 import { error, fail, redirect } from '@sveltejs/kit';
+import type { PageServerLoad, Actions } from './$types';
 import { getPostById, updatePost } from '$lib/server/supabase/queries/posts';
-import { getUser } from '$lib/server/supabase/auth';
+import { getUser, getSession, getUserOrCreateAnonymous } from '$lib/server/supabase/auth';
 
-export async function load({ params, cookies }) {
+export const load: PageServerLoad = async ({ params, cookies }) => {
   try {
     const postId = params.id;
 
@@ -16,15 +17,22 @@ export async function load({ params, cookies }) {
       throw error(404, '게시글을 찾을 수 없습니다');
     }
 
+    // 익명 글 판단: post.isAnonymous 사용
+    const isAnonymousPost = post.isAnonymous ?? false;
+
     const user = await getUser(cookies);
 
     // 정책:
-    // - 익명 글: "비로그인 상태"에서만 비밀번호로 수정 가능
+    // - 익명 글: "비로그인 상태"에서만 비밀번호로 수정 가능 (다른 컴퓨터에서도 비밀번호로 수정 가능)
     // - 로그인 글: 작성자만 수정 가능
-    if (!post.userId) {
-      if (user) throw error(403, '익명 게시글은 로그아웃 상태에서 비밀번호로만 수정할 수 있습니다');
+    if (isAnonymousPost) {
+      // 익명 글은 로그인 사용자가 아닌 경우만 수정 가능 (항상 비밀번호 필요)
+      if (user && user.email) {
+        throw error(403, '익명 게시글은 로그아웃 상태에서 비밀번호로만 수정할 수 있습니다');
+      }
     } else {
-      if (!user || user.id !== post.userId) {
+      // 로그인 글은 작성자 본인만 수정 가능
+      if (!user || !post.userId || user.id !== post.userId) {
         throw error(403, '본인의 게시글만 수정할 수 있습니다');
       }
     }
@@ -40,9 +48,9 @@ export async function load({ params, cookies }) {
     console.error('게시글 로드 오류:', err);
     throw error(500, '게시글을 불러오는 중 오류가 발생했습니다');
   }
-}
+};
 
-export const actions = {
+export const actions: Actions = {
   default: async ({ request, params, cookies }) => {
     try {
       const postId = params.id;
@@ -58,25 +66,29 @@ export const actions = {
         return fail(404, { error: '게시글을 찾을 수 없습니다.' });
       }
 
+      // 익명 글 판단: post.isAnonymous 사용
+      const isAnonymousPost = post.isAnonymous ?? false;
+
       const formData = await request.formData();
       const title = formData.get('title')?.toString();
       const content = formData.get('content')?.toString();
       const author = formData.get('author')?.toString();
       const editPassword = formData.get('editPassword')?.toString();
       const user = await getUser(cookies);
-      const isAnonymousPost = !post.userId;
       const isOwner = !!user && !!post.userId && user.id === post.userId;
 
-      // 유효성 검사
-      if (!title || !content) {
-        return fail(400, {
-          error: '제목과 내용을 입력해주세요.',
-          values: {
-            title: title || '',
-            content: content || '',
-            author: author || ''
-          }
-        });
+      // 필드별 유효성 검사
+      const fieldErrors: Record<string, string> = {};
+      let hasErrors = false;
+
+      if (!title || title.trim().length === 0) {
+        fieldErrors.title = '제목을 입력해주세요.';
+        hasErrors = true;
+      }
+
+      if (!content || content.trim().length === 0) {
+        fieldErrors.content = '내용을 입력해주세요.';
+        hasErrors = true;
       }
 
       // 로그인 글: 작성자만 수정 가능 (비밀번호 없음)
@@ -85,18 +97,34 @@ export const actions = {
       }
 
       // 익명 글: "비로그인 상태"에서만 비밀번호로 수정 가능
-      if (isAnonymousPost && user) {
+      if (isAnonymousPost && user && user.email) {
         return fail(403, { error: '익명 게시글은 로그아웃 상태에서 비밀번호로만 수정할 수 있습니다.' });
       }
+      
       if (isAnonymousPost && !editPassword) {
+        fieldErrors.editPassword = '비밀번호를 입력해주세요.';
+        hasErrors = true;
+      }
+
+      if (hasErrors) {
         return fail(400, {
-          error: '비밀번호를 입력해주세요.',
+          error: '입력한 내용을 확인해주세요.',
+          fieldErrors,
           values: {
             title: title || '',
             content: content || '',
             author: author || ''
           }
         });
+      }
+
+      // 세션 토큰 가져오기 (RLS 정책 적용을 위해)
+      // 익명 글의 경우 세션이 없으면 익명 세션 생성
+      let sessionTokens = getSession(cookies);
+      if (isAnonymousPost && !sessionTokens) {
+        // 익명 글 수정을 위해 익명 세션 생성
+        const anonymousUser = await getUserOrCreateAnonymous(cookies);
+        sessionTokens = getSession(cookies);
       }
 
       // 게시글 수정
@@ -108,9 +136,10 @@ export const actions = {
           author_name: isAnonymousPost ? (author || undefined) : (user?.nickname || user?.email || undefined)
         },
         {
-          userId: isAnonymousPost ? null : (user?.id ?? null),
-          editPassword: isAnonymousPost ? editPassword : undefined
-        }
+          userId: isAnonymousPost ? null : (user?.id ?? null), // 익명 글은 항상 null
+          editPassword: isAnonymousPost ? editPassword : undefined // 익명 글은 항상 비밀번호 필요
+        },
+        sessionTokens || undefined
       );
 
       // 게시글 상세 페이지로 리다이렉트
@@ -122,8 +151,9 @@ export const actions = {
       }
 
       console.error('게시글 수정 오류:', err);
+      const errorMessage = err instanceof Error ? err.message : '게시글 수정 중 오류가 발생했습니다.';
       return fail(500, {
-        error: '게시글 수정 중 오류가 발생했습니다.'
+        error: errorMessage
       });
     }
   }

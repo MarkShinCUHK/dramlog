@@ -1,5 +1,6 @@
-import { createSupabaseClient } from '../client.js';
+import { createSupabaseClient, createSupabaseClientWithSession } from '../client.js';
 import type { Post, PostRow } from '../types.js';
+import type { SessionTokens } from '../auth.js';
 import crypto from 'node:crypto';
 
 const DEFAULT_AUTHOR_NAME = '익명의 위스키 러버';
@@ -23,7 +24,8 @@ function hashEditPassword(password: string) {
   return `scrypt$${N}$${r}$${p}$${salt.toString('base64')}$${hash.toString('base64')}`;
 }
 
-function verifyEditPassword(password: string, stored: string) {
+function verifyEditPassword(password: string, stored: string | null | undefined): boolean {
+  if (!stored) return false;
   const parts = stored.split('$');
   if (parts.length !== 6 || parts[0] !== 'scrypt') return false;
 
@@ -51,6 +53,7 @@ function mapRowToPost(row: PostRow): Post {
     author: row.author_name || DEFAULT_AUTHOR_NAME,
     createdAt: dateStr,
     userId: row.user_id ?? null,
+    isAnonymous: row.is_anonymous ?? false,
     // 선택적 필드들 안전하게 처리
     likes: row.like_count ?? undefined,
     views: undefined, // 현재 스키마에 없음
@@ -209,19 +212,28 @@ export async function getPostById(id: string): Promise<Post | null> {
 
 /**
  * 게시글 생성
+ * @param input 게시글 입력 데이터
+ * @param accessToken 세션 토큰 (RLS 정책 적용을 위해 필요)
  */
-export async function createPost(input: {
-  title: string;
-  content: string;
-  author_name?: string;
-  edit_password?: string;
-  user_id?: string | null;
-}): Promise<Post> {
+export async function createPost(
+  input: {
+    title: string;
+    content: string;
+    author_name?: string;
+    edit_password?: string;
+    user_id?: string | null;
+  },
+  accessToken?: string
+): Promise<Post> {
   try {
-    const supabase = createSupabaseClient();
+    // 세션 토큰이 있으면 사용, 없으면 기본 클라이언트 사용
+    const supabase = accessToken
+      ? createSupabaseClientWithSession({ accessToken, refreshToken: '' })
+      : createSupabaseClient();
 
-    const isLoggedInPost = !!input.user_id;
-    const needsPassword = !isLoggedInPost;
+    // edit_password가 있으면 익명 글, 없으면 로그인 글
+    const isAnonymous = !!input.edit_password;
+    const needsPassword = isAnonymous;
 
     if (needsPassword) {
       if (!input.edit_password || input.edit_password.length < 4) {
@@ -239,7 +251,8 @@ export async function createPost(input: {
         content: input.content,
         author_name: normalizeAuthorName(input.author_name),
         edit_password_hash: editPasswordHash,
-        user_id: input.user_id ?? null
+        user_id: input.user_id ?? null,
+        is_anonymous: isAnonymous
       })
       .select()
       .single();
@@ -323,15 +336,16 @@ export async function updatePost(
     content?: string;
     author_name?: string;
   },
-  auth: { editPassword?: string; userId?: string | null }
+  auth: { editPassword?: string; userId?: string | null },
+  sessionTokens?: SessionTokens // Optional session tokens for RLS
 ): Promise<Post> {
   try {
-    const supabase = createSupabaseClient();
+    const supabase = sessionTokens ? createSupabaseClientWithSession(sessionTokens) : createSupabaseClient();
 
     // 소유/비밀번호 검증을 위해 authRow 조회
     const { data: authRow, error: authError } = await supabase
       .from('posts')
-      .select('id, edit_password_hash, user_id')
+      .select('id, edit_password_hash, user_id, is_anonymous')
       .eq('id', id)
       .single();
 
@@ -343,26 +357,33 @@ export async function updatePost(
       throw authError;
     }
 
-    // 로그인 글: user_id가 있으면 userId로 소유권 검증
-    if (authRow?.user_id) {
-      if (!auth.userId) {
-        throw new Error('로그인이 필요합니다.');
-      }
-      if (auth.userId !== authRow.user_id) {
-        throw new Error('본인의 게시글만 수정할 수 있습니다.');
-      }
-    } else {
+    // 익명 글 판단: is_anonymous 컬럼 사용
+    const isAnonymousPost = authRow?.is_anonymous ?? false;
+    
+    if (isAnonymousPost) {
       // 익명 글: 비밀번호 검증
-      if (!authRow?.edit_password_hash) {
-        throw new Error('이 게시글은 비밀번호로 수정할 수 없습니다.');
-      }
       if (!auth.editPassword) {
         throw new Error('비밀번호를 입력해주세요.');
+      }
+
+      if (!authRow?.edit_password_hash) {
+        throw new Error('이 게시글은 비밀번호로 수정할 수 없습니다.');
       }
 
       const ok = verifyEditPassword(auth.editPassword, authRow.edit_password_hash);
       if (!ok) {
         throw new Error('비밀번호가 일치하지 않습니다.');
+      }
+    } else {
+      // 로그인 글: user_id로 소유권 검증
+      if (!authRow?.user_id) {
+        throw new Error('이 게시글은 수정할 수 없습니다.');
+      }
+      if (!auth.userId) {
+        throw new Error('로그인이 필요합니다.');
+      }
+      if (auth.userId !== authRow.user_id) {
+        throw new Error('본인의 게시글만 수정할 수 있습니다.');
       }
     }
 
@@ -402,15 +423,19 @@ export async function updatePost(
 /**
  * 게시글 삭제
  */
-export async function deletePost(id: string, auth: { editPassword?: string; userId?: string | null }): Promise<void> {
+export async function deletePost(
+  id: string,
+  auth: { editPassword?: string; userId?: string | null },
+  sessionTokens?: SessionTokens // Optional session tokens for RLS
+): Promise<void> {
   try {
-    const supabase = createSupabaseClient();
+    const supabase = sessionTokens ? createSupabaseClientWithSession(sessionTokens) : createSupabaseClient();
 
     // 비밀번호 검증을 위해 해시 조회
     // (delete는 반환 row가 없을 수 있으므로 먼저 select)
     const { data: authRow, error: authError } = await supabase
       .from('posts')
-      .select('id, edit_password_hash, user_id')
+      .select('id, edit_password_hash, user_id, is_anonymous')
       .eq('id', id)
       .single();
 
@@ -422,19 +447,11 @@ export async function deletePost(id: string, auth: { editPassword?: string; user
       throw authError;
     }
 
-    // 로그인 글: user_id가 있으면 userId로 소유권 검증
-    if (authRow?.user_id) {
-      if (!auth.userId) {
-        throw new Error('로그인이 필요합니다.');
-      }
-      if (auth.userId !== authRow.user_id) {
-        throw new Error('본인의 게시글만 삭제할 수 있습니다.');
-      }
-    } else {
+    // 익명 글 판단: is_anonymous 컬럼 사용
+    const isAnonymousPost = authRow?.is_anonymous ?? false;
+    
+    if (isAnonymousPost) {
       // 익명 글: 비밀번호 검증
-      if (!authRow?.edit_password_hash) {
-        throw new Error('이 게시글은 비밀번호로 삭제할 수 없습니다.');
-      }
       if (!auth.editPassword) {
         throw new Error('비밀번호를 입력해주세요.');
       }
@@ -442,6 +459,17 @@ export async function deletePost(id: string, auth: { editPassword?: string; user
       const ok = verifyEditPassword(auth.editPassword, authRow.edit_password_hash);
       if (!ok) {
         throw new Error('비밀번호가 일치하지 않습니다.');
+      }
+    } else {
+      // 로그인 글: user_id로 소유권 검증
+      if (!authRow?.user_id) {
+        throw new Error('이 게시글은 삭제할 수 없습니다.');
+      }
+      if (!auth.userId) {
+        throw new Error('로그인이 필요합니다.');
+      }
+      if (auth.userId !== authRow.user_id) {
+        throw new Error('본인의 게시글만 삭제할 수 있습니다.');
       }
     }
 
@@ -456,6 +484,76 @@ export async function deletePost(id: string, auth: { editPassword?: string; user
     }
   } catch (error) {
     console.error('게시글 삭제 오류:', error);
+    throw error;
+  }
+}
+
+/**
+ * 사용자의 모든 익명 글을 회원 글로 전환
+ * 회원가입 시 기존 익명 글의 is_anonymous를 false로 변경하고 user_id를 업데이트
+ */
+export async function convertAnonymousPostsToUserPosts(
+  oldUserId: string,
+  newUserId: string,
+  sessionTokens?: SessionTokens
+): Promise<number> {
+  try {
+    const supabase = sessionTokens
+      ? createSupabaseClientWithSession(sessionTokens)
+      : createSupabaseClient();
+
+    // 먼저 업데이트할 글들을 조회 (디버깅용)
+    const { data: postsToUpdate, error: selectError } = await supabase
+      .from('posts')
+      .select('id, user_id, is_anonymous')
+      .eq('user_id', oldUserId)
+      .eq('is_anonymous', true);
+
+    if (selectError) {
+      console.error('익명 글 조회 오류:', selectError);
+      throw selectError;
+    }
+
+    if (!postsToUpdate || postsToUpdate.length === 0) {
+      console.log('전환할 익명 글이 없습니다.', { oldUserId, newUserId });
+      return 0;
+    }
+
+    console.log(`익명 글 전환 시도: ${postsToUpdate.length}개`, { oldUserId, newUserId });
+
+    // 익명 글 업데이트
+    // RLS 정책: 익명 글(user_id IS NULL 또는 is_anonymous = true)은 업데이트 가능해야 함
+    const { data, error } = await supabase
+      .from('posts')
+      .update({ 
+        is_anonymous: false,
+        user_id: newUserId
+      })
+      .eq('user_id', oldUserId)
+      .eq('is_anonymous', true)
+      .select('id');
+
+    if (error) {
+      console.error('익명 글 전환 오류:', error);
+      console.error('에러 상세:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      });
+      throw error;
+    }
+
+    const updatedCount = data?.length ?? 0;
+    console.log(`익명 글 전환 완료: ${updatedCount}개 업데이트됨`);
+    
+    if (updatedCount !== postsToUpdate.length) {
+      console.warn(`경고: 조회된 글(${postsToUpdate.length}개)과 업데이트된 글(${updatedCount}개)의 개수가 다릅니다.`);
+    }
+
+    return updatedCount;
+  } catch (error) {
+    console.error('익명 글 전환 오류:', error);
     throw error;
   }
 }

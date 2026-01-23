@@ -16,6 +16,27 @@ if (!PUBLIC_SUPABASE_URL || !PUBLIC_SUPABASE_ANON_KEY) {
   );
 }
 
+/**
+ * 기본 Supabase 클라이언트 생성 (ANON_KEY 사용)
+ * RLS 정책이 적용되므로 익명 사용자도 인증된 사용자로 처리 가능
+ */
 export function createSupabaseClient() {
   return createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
+}
+
+/**
+ * 세션 토큰을 사용하는 Supabase 클라이언트 생성
+ * RLS 정책에서 auth.uid()를 사용할 수 있도록 함
+ */
+export function createSupabaseClientWithSession(sessionTokens: { accessToken: string; refreshToken?: string }) {
+  return createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${sessionTokens.accessToken}`
+      }
+    },
+    auth: {
+      persistSession: false // Session is managed by cookies
+    }
+  });
 }

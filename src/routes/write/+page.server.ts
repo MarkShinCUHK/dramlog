@@ -1,6 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { createPost } from '$lib/server/supabase/queries/posts';
-import { getUser } from '$lib/server/supabase/auth';
+import { getUser, getUserOrCreateAnonymous, getSession } from '$lib/server/supabase/auth';
 
 export const actions = {
   default: async ({ request, cookies }) => {
@@ -13,10 +13,43 @@ export const actions = {
       const editPassword = formData.get('editPassword')?.toString();
       const editPasswordConfirm = formData.get('editPasswordConfirm')?.toString();
 
-      // 유효성 검사
-      if (!title || !content) {
+      // 필드별 유효성 검사
+      const fieldErrors = {};
+      let hasErrors = false;
+
+      if (!title || title.trim().length === 0) {
+        fieldErrors.title = '제목을 입력해주세요.';
+        hasErrors = true;
+      }
+
+      if (!content || content.trim().length === 0) {
+        fieldErrors.content = '내용을 입력해주세요.';
+        hasErrors = true;
+      }
+
+      // 익명 사용자도 세션을 가지도록 함 (RLS 정책 적용을 위해)
+      const user = await getUserOrCreateAnonymous(cookies);
+      const isLoggedIn = !user.isAnonymous && !!user.email;
+
+      if (!isLoggedIn) {
+        if (!editPassword || editPassword.length < 4) {
+          fieldErrors.editPassword = '비밀번호는 4자 이상으로 입력해주세요.';
+          hasErrors = true;
+        }
+
+        if (!editPasswordConfirm) {
+          fieldErrors.editPasswordConfirm = '비밀번호 확인을 입력해주세요.';
+          hasErrors = true;
+        } else if (editPassword && editPassword !== editPasswordConfirm) {
+          fieldErrors.editPasswordConfirm = '비밀번호 확인이 일치하지 않습니다.';
+          hasErrors = true;
+        }
+      }
+
+      if (hasErrors) {
         return fail(400, {
-          error: '제목과 내용을 입력해주세요.',
+          error: '입력한 내용을 확인해주세요.',
+          fieldErrors,
           values: {
             title: title || '',
             content: content || '',
@@ -26,45 +59,24 @@ export const actions = {
         });
       }
 
-      const user = await getUser(cookies);
-      const isLoggedIn = !!user;
-
-      if (!isLoggedIn) {
-        if (!editPassword || editPassword.length < 4) {
-          return fail(400, {
-            error: '비밀번호는 4자 이상으로 입력해주세요.',
-            values: {
-              title: title || '',
-              content: content || '',
-              author: author || '',
-              excerpt: excerpt || ''
-            }
-          });
-        }
-
-        if (editPassword !== editPasswordConfirm) {
-          return fail(400, {
-            error: '비밀번호 확인이 일치하지 않습니다.',
-            values: {
-              title: title || '',
-              content: content || '',
-              author: author || '',
-              excerpt: excerpt || ''
-            }
-          });
-        }
-      }
+      // 세션 토큰 가져오기 (RLS 정책 적용을 위해)
+      const session = getSession(cookies);
+      const accessToken = session?.accessToken;
 
       // 게시글 생성 (queries/posts.ts의 createPost 사용)
-      const post = await createPost({
-        title,
-        content,
-        // 로그인 사용자는 닉네임을 작성자명으로 강제
-        author_name: isLoggedIn ? (user?.nickname || user?.email || undefined) : (author || undefined),
-        edit_password: isLoggedIn ? undefined : editPassword,
-        user_id: user?.id ?? null
-        // excerpt는 현재 스키마에 없으므로 제외
-      });
+      // 익명 글도 익명 세션의 user_id를 저장 (RLS 정책 적용을 위해)
+      const post = await createPost(
+        {
+          title,
+          content,
+          // 로그인 사용자는 닉네임을 작성자명으로 강제
+          author_name: isLoggedIn ? (user?.nickname || user?.email || undefined) : (author || undefined),
+          edit_password: isLoggedIn ? undefined : editPassword,
+          user_id: user.id // 익명 사용자도 익명 세션의 user_id를 저장
+          // excerpt는 현재 스키마에 없으므로 제외
+        },
+        accessToken
+      );
 
       // 게시글 상세 페이지로 리다이렉트 (id는 uuid이므로 string)
       throw redirect(303, `/posts/${post.id}`);

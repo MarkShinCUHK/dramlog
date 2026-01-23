@@ -15,7 +15,7 @@
   <meta name="description" content="위스키 리뷰와 정보를 공유하는 커뮤니티입니다." />
 </svelte:head>
 
-<div class="max-w-6xl mx-auto px-4 py-12">
+<div class="max-w-6xl xl:max-w-7xl mx-auto px-4 xl:px-8 py-12">
   <!-- 메인 타이틀 -->
   <section class="mb-16 text-center">
     <div class="mb-4">
@@ -33,7 +33,7 @@
 
   <!-- 주요 기능 카드 -->
   <section class="mb-16">
-    <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+    <div class="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3">
       <!-- 게시글 목록 -->
       <a
         href="/posts"

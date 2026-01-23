@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS posts (
   edit_password_hash TEXT,
   -- 선택 로그인 도입 시 연결 (게스트 글 Claim은 하지 않음)
   user_id UUID,
+  -- 익명 글 여부 (명확한 판단을 위해)
+  is_anonymous BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -25,6 +27,9 @@ ALTER TABLE posts
 
 ALTER TABLE posts
   ADD COLUMN IF NOT EXISTS user_id UUID;
+
+ALTER TABLE posts
+  ADD COLUMN IF NOT EXISTS is_anonymous BOOLEAN DEFAULT false;
 
 ALTER TABLE posts
   ALTER COLUMN author_name SET DEFAULT '익명의 위스키 러버';
@@ -66,31 +71,83 @@ CREATE INDEX IF NOT EXISTS idx_likes_user_id ON likes(user_id);
 
 -- RLS (Row Level Security) 설정
 -- 
--- MVP 단계: RLS 비활성화 (모든 사용자가 읽기/쓰기 가능)
--- 아래 명령어로 RLS를 비활성화합니다:
-ALTER TABLE posts DISABLE ROW LEVEL SECURITY;
-ALTER TABLE comments DISABLE ROW LEVEL SECURITY;
-ALTER TABLE likes DISABLE ROW LEVEL SECURITY;
---
--- 프로덕션 단계: RLS 활성화 및 정책 설정
--- 1. RLS 활성화:
---    ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
---
--- 2. 읽기 정책 (모든 사용자 읽기 가능):
---    CREATE POLICY "Anyone can read posts"
---    ON posts FOR SELECT
---    USING (true);
---
--- 3. 쓰기 정책 (인증된 사용자만 작성 가능):
---    CREATE POLICY "Authenticated users can insert posts"
---    ON posts FOR INSERT
---    WITH CHECK (auth.role() = 'authenticated');
---
--- 4. 수정/삭제 정책 (작성자만 가능):
---    CREATE POLICY "Users can update own posts"
---    ON posts FOR UPDATE
---    USING (auth.uid()::text = user_id);
---
---    CREATE POLICY "Users can delete own posts"
---    ON posts FOR DELETE
---    USING (auth.uid()::text = user_id);
+-- Anonymous Auth와 함께 사용하여 익명 사용자도 인증된 사용자로 처리
+-- 익명 글은 비밀번호로 관리하므로 수정/삭제는 서버 사이드에서 처리
+
+-- 1. RLS 활성화
+ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE likes ENABLE ROW LEVEL SECURITY;
+
+-- 2. posts 테이블 정책
+-- 읽기: 모든 사용자 (익명 포함) 읽기 가능
+CREATE POLICY "Anyone can read posts"
+ON posts FOR SELECT
+USING (true);
+
+-- 작성: 모든 사용자 (익명 포함) 작성 가능
+-- Anonymous Auth를 사용하면 익명 사용자도 auth.uid()를 가짐
+CREATE POLICY "Anyone can insert posts"
+ON posts FOR INSERT
+WITH CHECK (true);
+
+-- 수정: 로그인 글은 작성자만, 익명 글은 서버에서 비밀번호 검증
+-- 익명 글(is_anonymous = true)은 RLS에서 허용하고 서버에서 비밀번호 검증
+CREATE POLICY "Users can update own posts or anonymous posts"
+ON posts FOR UPDATE
+USING (
+  -- 로그인 글: 작성자 본인만
+  (user_id IS NOT NULL AND auth.uid() = user_id)
+  OR
+  -- 익명 글: 서버에서 비밀번호 검증 (RLS는 허용)
+  (is_anonymous = true)
+);
+
+-- 삭제: 로그인 글은 작성자만, 익명 글은 서버에서 비밀번호 검증
+CREATE POLICY "Users can delete own posts or anonymous posts"
+ON posts FOR DELETE
+USING (
+  -- 로그인 글: 작성자 본인만
+  (user_id IS NOT NULL AND auth.uid() = user_id)
+  OR
+  -- 익명 글: 서버에서 비밀번호 검증 (RLS는 허용)
+  (is_anonymous = true)
+);
+
+-- 3. comments 테이블 정책
+-- 읽기: 모든 사용자 읽기 가능
+CREATE POLICY "Anyone can read comments"
+ON comments FOR SELECT
+USING (true);
+
+-- 작성: 로그인 사용자만 (익명 사용자는 댓글 불가)
+CREATE POLICY "Authenticated users can insert comments"
+ON comments FOR INSERT
+WITH CHECK (auth.role() = 'authenticated' AND auth.uid() = user_id);
+
+-- 수정: 작성자 본인만
+CREATE POLICY "Users can update own comments"
+ON comments FOR UPDATE
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
+
+-- 삭제: 작성자 본인만
+CREATE POLICY "Users can delete own comments"
+ON comments FOR DELETE
+USING (auth.uid() = user_id);
+
+-- 4. likes 테이블 정책
+-- 읽기: 모든 사용자 읽기 가능
+CREATE POLICY "Anyone can read likes"
+ON likes FOR SELECT
+USING (true);
+
+-- 작성: 로그인 사용자만 (익명 사용자는 좋아요 불가)
+CREATE POLICY "Authenticated users can insert likes"
+ON likes FOR INSERT
+WITH CHECK (auth.role() = 'authenticated' AND auth.uid() = user_id);
+
+-- 삭제: 작성자 본인만
+CREATE POLICY "Users can delete own likes"
+ON likes FOR DELETE
+USING (auth.uid() = user_id);

@@ -4,6 +4,7 @@
   import LikeButton from '$lib/components/LikeButton.svelte';
   import CommentList from '$lib/components/CommentList.svelte';
   import CommentForm from '$lib/components/CommentForm.svelte';
+  import { showToast } from '$lib/stores/toast';
   
   export let data;
 
@@ -16,10 +17,10 @@
 </svelte:head>
 
 {#if data.post}
-  <article class="max-w-4xl mx-auto px-4 py-12">
+  <article class="max-w-4xl xl:max-w-5xl mx-auto px-4 xl:px-8 py-12">
     <!-- 헤더 -->
     <header class="mb-10">
-      <h1 class="text-4xl sm:text-5xl font-bold text-whiskey-900 mb-6 leading-tight tracking-tight">{data.post.title}</h1>
+      <h1 class="text-3xl sm:text-4xl font-bold text-whiskey-900 mb-6 leading-tight tracking-tight">{data.post.title}</h1>
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-sm text-gray-600">
         <div class="flex items-center gap-4">
           <span class="font-semibold text-gray-900">{data.post.author}</span>
@@ -85,20 +86,48 @@
         >
           수정하기
         </a>
-        <form method="POST" action="?/delete" use:enhance class="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <form
+          method="POST"
+          action="?/delete"
+          use:enhance={() => {
+            return async ({ result, update, cancel }) => {
+              if (!confirm('정말로 이 게시글을 삭제하시겠습니까?')) {
+                cancel();
+                return;
+              }
+              
+              try {
+                // 기본 업데이트 먼저 수행 (redirect 포함)
+                await update();
+                
+                // result가 있을 때만 토스트 표시
+                if (result) {
+                  if (result.type === 'success' || result.type === 'redirect') {
+                    showToast('게시글이 삭제되었습니다.', 'success');
+                  } else if (result.type === 'failure' && result.data?.error) {
+                    showToast(result.data.error, 'error');
+                  }
+                }
+              } catch (error) {
+                console.error('폼 제출 오류:', error);
+                showToast('게시글 삭제 중 오류가 발생했습니다.', 'error');
+              }
+            };
+          }}
+          class="flex flex-col gap-3 sm:flex-row sm:items-center"
+        >
           {#if data.needsEditPassword}
             <input
               type="password"
               name="editPassword"
               placeholder="비밀번호 (삭제용)"
-              class="w-full sm:w-56 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-colors"
+              class="w-full sm:w-56 px-4 py-3 sm:py-2.5 min-h-[44px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-colors"
               required
             />
           {/if}
           <button
             type="submit"
-            class="inline-flex items-center justify-center px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium shadow-sm hover:shadow-md"
-            onclick="return confirm('정말로 이 게시글을 삭제하시겠습니까?')"
+            class="inline-flex items-center justify-center px-6 py-3 min-h-[44px] bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium shadow-sm hover:shadow-md"
           >
             삭제하기
           </button>
@@ -107,7 +136,7 @@
     </div>
   </article>
 {:else}
-  <div class="max-w-4xl mx-auto px-4 py-20 text-center">
+  <div class="max-w-4xl xl:max-w-5xl mx-auto px-4 xl:px-8 py-20 text-center">
     <div class="rounded-2xl bg-white/60 backdrop-blur-sm p-12 ring-1 ring-black/5 shadow-sm">
       <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-4">게시글을 찾을 수 없습니다</h1>
       <p class="text-gray-600 mb-8">요청하신 게시글이 존재하지 않습니다.</p>

@@ -3,6 +3,9 @@ export default {
   content: ['./src/**/*.{html,js,svelte,ts}'],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Noto Sans KR', 'system-ui', '-apple-system', 'sans-serif'],
+      },
       colors: {
         // 위스키 테마 색상
         whiskey: {

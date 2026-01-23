@@ -8,6 +8,7 @@ export type PostRow = {
   author_name: string;
   edit_password_hash?: string | null;
   user_id?: string | null;
+  is_anonymous?: boolean | null;
   created_at: string; // ISO 8601 timestamptz
   // 선택적 필드들 (스키마에 없어도 안전하게 처리)
   like_count?: number | null;
@@ -26,6 +27,7 @@ export type Post = {
   author: string;
   createdAt: string; // YYYY-MM-DD
   userId?: string | null; // 로그인 글 소유자 (익명 글이면 null)
+  isAnonymous?: boolean; // 익명 글 여부
   excerpt?: string;
   views?: number;
   likes?: number;

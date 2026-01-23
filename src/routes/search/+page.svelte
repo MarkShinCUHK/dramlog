@@ -17,9 +17,9 @@
   <title>검색 - DramLog</title>
 </svelte:head>
 
-<div class="max-w-6xl mx-auto px-4 py-12">
+<div class="max-w-6xl xl:max-w-7xl mx-auto px-4 xl:px-8 py-12">
   <div class="mb-12">
-    <h1 class="text-4xl sm:text-5xl font-bold text-whiskey-900 mb-3 tracking-tight">검색</h1>
+    <h1 class="text-3xl sm:text-4xl font-bold text-whiskey-900 mb-3 tracking-tight">검색</h1>
     {#if data.q?.trim()}
       <p class="text-lg text-gray-600">
         <span class="font-semibold text-gray-900">"{data.q}"</span> 검색 결과 ({data.totalCount}개)
@@ -31,13 +31,13 @@
 
   {#if $navigating}
     <!-- 네비게이션 중 스켈레톤 표시 -->
-    <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+    <div class="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3">
       {#each Array(6) as _}
         <Skeleton />
       {/each}
     </div>
   {:else if data.q?.trim() && data.posts && data.posts.length > 0}
-    <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+    <div class="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3">
       {#each data.posts as post}
         <PostCard {post} />
       {/each}

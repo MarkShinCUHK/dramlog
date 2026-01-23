@@ -14,6 +14,7 @@ export type AuthUser = {
   id: string;
   email: string | null;
   nickname: string | null;
+  isAnonymous?: boolean;
 };
 
 function cookieOptions() {
@@ -42,6 +43,32 @@ export function getSession(cookies: Cookies): SessionTokens | null {
   return { accessToken, refreshToken };
 }
 
+/**
+ * 익명 사용자 세션 생성 (Anonymous Auth)
+ * 익명 사용자도 인증된 사용자로 처리하여 RLS 정책 적용 가능
+ */
+export async function createAnonymousSession(cookies: Cookies): Promise<SessionTokens | null> {
+  const supabase = createSupabaseClient();
+  const { data, error } = await supabase.auth.signInAnonymously();
+  
+  if (error || !data.session) {
+    console.error('Anonymous session creation failed:', error);
+    return null;
+  }
+
+  const tokens: SessionTokens = {
+    accessToken: data.session.access_token,
+    refreshToken: data.session.refresh_token
+  };
+
+  setSessionCookies(cookies, tokens);
+  return tokens;
+}
+
+/**
+ * 사용자 정보 가져오기 (익명 사용자 포함)
+ * 익명 사용자는 email이 null이고 isAnonymous가 true
+ */
 export async function getUser(cookies: Cookies): Promise<AuthUser | null> {
   const session = getSession(cookies);
   if (!session) return null;
@@ -52,15 +79,49 @@ export async function getUser(cookies: Cookies): Promise<AuthUser | null> {
 
   const nickname =
     typeof data.user.user_metadata?.nickname === 'string' ? data.user.user_metadata.nickname : null;
+  
+  // 익명 사용자 확인 (email이 null이고 is_anonymous가 true)
+  const isAnonymous = data.user.is_anonymous ?? false;
 
-  return { id: data.user.id, email: data.user.email ?? null, nickname };
+  return { 
+    id: data.user.id, 
+    email: data.user.email ?? null, 
+    nickname,
+    isAnonymous
+  };
 }
 
+/**
+ * 로그인 사용자만 허용 (익명 사용자 제외)
+ */
 export async function requireAuth(cookies: Cookies) {
   const user = await getUser(cookies);
-  if (!user) {
+  if (!user || user.isAnonymous) {
     throw redirect(303, '/login');
   }
+  return user;
+}
+
+/**
+ * 사용자 또는 익명 사용자 가져오기 (세션이 없으면 익명 세션 생성)
+ * 게시글 작성 등에서 익명 사용자도 인증된 사용자로 처리하기 위해 사용
+ */
+export async function getUserOrCreateAnonymous(cookies: Cookies): Promise<AuthUser> {
+  let user = await getUser(cookies);
+  
+  // 세션이 없거나 만료된 경우 익명 세션 생성
+  if (!user) {
+    const tokens = await createAnonymousSession(cookies);
+    if (!tokens) {
+      throw new Error('Failed to create anonymous session');
+    }
+    // 다시 사용자 정보 가져오기
+    user = await getUser(cookies);
+    if (!user) {
+      throw new Error('Failed to get user after creating anonymous session');
+    }
+  }
+  
   return user;
 }
 

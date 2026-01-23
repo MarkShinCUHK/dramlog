@@ -21,7 +21,7 @@
 </svelte:head>
 
 <div class="max-w-md mx-auto px-4 py-12">
-  <h1 class="text-4xl sm:text-5xl font-bold text-whiskey-900 mb-10 tracking-tight text-center">로그인</h1>
+  <h1 class="text-3xl sm:text-4xl font-bold text-whiskey-900 mb-10 tracking-tight text-center">로그인</h1>
 
   <form method="POST" use:enhance class="rounded-2xl bg-white/80 backdrop-blur-sm p-8 sm:p-10 ring-1 ring-black/5 shadow-sm">
     {#if successMessage}
@@ -44,7 +44,7 @@
         type="email"
         bind:value={email}
         required
-        class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-whiskey-500 focus:border-whiskey-500 outline-none transition-colors"
+        class="w-full px-4 py-3 sm:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-whiskey-500 focus:border-whiskey-500 outline-none transition-colors"
         placeholder="you@example.com"
       />
     </div>
@@ -57,14 +57,14 @@
         type="password"
         bind:value={password}
         required
-        class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-whiskey-500 focus:border-whiskey-500 outline-none transition-colors"
+        class="w-full px-4 py-3 sm:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-whiskey-500 focus:border-whiskey-500 outline-none transition-colors"
         placeholder="비밀번호"
       />
     </div>
 
     <button
       type="submit"
-      class="w-full px-6 py-3 bg-whiskey-600 text-white rounded-lg hover:bg-whiskey-700 transition-colors font-medium shadow-sm hover:shadow-md"
+      class="w-full px-6 py-3 min-h-[44px] bg-whiskey-600 text-white rounded-lg hover:bg-whiskey-700 transition-colors font-medium shadow-sm hover:shadow-md"
     >
       로그인
     </button>
