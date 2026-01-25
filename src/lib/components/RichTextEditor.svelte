@@ -6,6 +6,10 @@
   import Link from '@tiptap/extension-link';
   import TextAlign from '@tiptap/extension-text-align';
   import Placeholder from '@tiptap/extension-placeholder';
+  import { Table } from '@tiptap/extension-table';
+  import { TableRow } from '@tiptap/extension-table-row';
+  import { TableHeader } from '@tiptap/extension-table-header';
+  import { TableCell } from '@tiptap/extension-table-cell';
 
   let {
     value = '',
@@ -70,8 +74,8 @@
       extensions: [
         StarterKit.configure({ 
           link: false, 
-          underline: false,
-          codeBlock: false // 공지사항에선 제거 권장
+          underline: false
+          // codeBlock은 기본적으로 활성화됨
         } as any),
         Underline,
         Link.configure({
@@ -84,6 +88,27 @@
         }),
         Placeholder.configure({
           placeholder
+        }),
+        Table.configure({
+          resizable: true,
+          HTMLAttributes: {
+            class: 'border-collapse border border-gray-300 my-4'
+          }
+        }),
+        TableRow.configure({
+          HTMLAttributes: {
+            class: 'border border-gray-300'
+          }
+        }),
+        TableHeader.configure({
+          HTMLAttributes: {
+            class: 'border border-gray-300 bg-gray-50 px-4 py-2 font-semibold'
+          }
+        }),
+        TableCell.configure({
+          HTMLAttributes: {
+            class: 'border border-gray-300 px-4 py-2'
+          }
         })
       ],
       editorProps: {
@@ -91,7 +116,9 @@
           class:
             'min-h-[260px] w-full rounded-lg px-4 py-3 sm:py-2.5 outline-none focus:outline-none prose prose-sm sm:prose-base max-w-none ' +
             'prose-p:my-2 prose-headings:mt-4 prose-headings:mb-2 prose-pre:bg-gray-900/90 prose-pre:text-gray-100 ' +
-            'prose-a:text-whiskey-700 hover:prose-a:text-whiskey-800'
+            'prose-a:text-whiskey-700 hover:prose-a:text-whiskey-800 prose-table:w-full prose-table:border-collapse ' +
+            'prose-th:border prose-th:border-gray-300 prose-th:bg-gray-50 prose-th:px-4 prose-th:py-2 ' +
+            'prose-td:border prose-td:border-gray-300 prose-td:px-4 prose-td:py-2'
         }
       },
       onTransaction: ({ editor }) => {
@@ -300,6 +327,18 @@
         </button>
         <button
           type="button"
+          class={toggleBtnClass(editorState.editor.isActive('codeBlock'))}
+          aria-pressed={editorState.editor.isActive('codeBlock')}
+          title="코드 블록"
+          onclick={() => editorState.editor?.chain().focus().toggleCodeBlock().run()}
+          disabled={!editorState.editor}
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+        </button>
+        <button
+          type="button"
           class={toggleBtnClass(editorState.editor.isActive('link'))}
           aria-pressed={editorState.editor.isActive('link')}
           title="링크"
@@ -310,6 +349,102 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
           </svg>
         </button>
+      </div>
+
+      <div class="h-6 w-px bg-black/10 mx-1"></div>
+
+      <!-- Table -->
+      <div class="flex items-center gap-1">
+        <button
+          type="button"
+          class={actionBtnClass()}
+          title="표 추가"
+          onclick={() => editorState.editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+          disabled={!editorState.editor}
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+        </button>
+        {#if editorState.editor?.isActive('table')}
+          <button
+            type="button"
+            class={actionBtnClass()}
+            title="행 추가 (위)"
+            onclick={() => editorState.editor?.chain().focus().addRowBefore().run()}
+            disabled={!editorState.editor || !editorState.editor.can().addRowBefore()}
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class={actionBtnClass()}
+            title="행 추가 (아래)"
+            onclick={() => editorState.editor?.chain().focus().addRowAfter().run()}
+            disabled={!editorState.editor || !editorState.editor.can().addRowAfter()}
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class={actionBtnClass()}
+            title="행 삭제"
+            onclick={() => editorState.editor?.chain().focus().deleteRow().run()}
+            disabled={!editorState.editor || !editorState.editor.can().deleteRow()}
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class={actionBtnClass()}
+            title="열 추가 (왼쪽)"
+            onclick={() => editorState.editor?.chain().focus().addColumnBefore().run()}
+            disabled={!editorState.editor || !editorState.editor.can().addColumnBefore()}
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class={actionBtnClass()}
+            title="열 추가 (오른쪽)"
+            onclick={() => editorState.editor?.chain().focus().addColumnAfter().run()}
+            disabled={!editorState.editor || !editorState.editor.can().addColumnAfter()}
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class={actionBtnClass()}
+            title="열 삭제"
+            onclick={() => editorState.editor?.chain().focus().deleteColumn().run()}
+            disabled={!editorState.editor || !editorState.editor.can().deleteColumn()}
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class={actionBtnClass()}
+            title="표 삭제"
+            onclick={() => editorState.editor?.chain().focus().deleteTable().run()}
+            disabled={!editorState.editor || !editorState.editor.can().deleteTable()}
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        {/if}
       </div>
 
       <div class="h-6 w-px bg-black/10 mx-1"></div>

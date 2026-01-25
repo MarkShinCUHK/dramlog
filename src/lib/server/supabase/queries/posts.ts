@@ -109,6 +109,20 @@ export function sanitizePostHtml(html: string): string {
         const next = { ...attribs };
         if (!next.target) next.target = '_blank';
         next.rel = 'noopener noreferrer';
+        
+        // URL 정규화: http:// 또는 https://로 시작하지 않으면 절대 URL로 변환
+        if (next.href) {
+          const href = next.href.trim();
+          // 상대 경로나 프로토콜 없는 URL인 경우
+          if (href && !href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('mailto:')) {
+            // 이미 상대 경로인 경우 그대로 유지 (내부 링크)
+            // 하지만 www.google.com 같은 경우는 https://를 추가
+            if (href.includes('.') && !href.startsWith('/') && !href.startsWith('./') && !href.startsWith('../')) {
+              next.href = `https://${href}`;
+            }
+          }
+        }
+        
         return { tagName, attribs: next };
       }
     }
