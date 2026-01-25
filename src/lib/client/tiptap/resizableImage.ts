@@ -100,13 +100,29 @@ export const ResizableImage = Image.extend({
       });
 
       // 에디터 외부 클릭 시 핸들 숨김
+      // bubble 단계에서 실행하여 에디터의 클릭 이벤트가 먼저 처리되도록 함
       const handleClickOutside = (e: MouseEvent) => {
-        if (!container.contains(e.target as Node)) {
-          isSelected = false;
-          container.style.outline = '';
-          hideResizeHandles(handles);
+        const target = e.target as Node;
+        // 이미지 컨테이너나 핸들이 아닌 곳을 클릭했을 때만 처리
+        if (!container.contains(target) && !handles.some(h => h.element.contains(target))) {
+          if (isSelected) {
+            isSelected = false;
+            container.style.outline = '';
+            hideResizeHandles(handles);
+            // 에디터 영역을 클릭한 경우 에디터에 포커스 주기
+            // view.dom은 에디터의 루트 DOM 요소
+            const editorDom = view.dom;
+            if (editorDom && editorDom.contains(target)) {
+              // 에디터 영역을 클릭한 경우, 약간의 지연 후 포커스
+              // 이렇게 하면 에디터의 기본 클릭 이벤트가 먼저 처리됨
+              setTimeout(() => {
+                view.focus();
+              }, 10);
+            }
+          }
         }
       };
+      // bubble 단계에서 실행하여 에디터의 클릭 이벤트가 먼저 처리되도록 함
       document.addEventListener('click', handleClickOutside);
 
       // 리사이즈 핸들 드래그 이벤트

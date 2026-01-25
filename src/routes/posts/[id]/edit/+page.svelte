@@ -25,20 +25,28 @@
   // 이미지 파일 추적 (Blob URL -> File 객체 매핑)
   let imageFiles = $state<Map<string, File>>(new Map());
 
-  // 초기값 설정 및 form 업데이트 시 동기화
+  // 초기값 설정: data.post가 로드되면 즉시 설정 (RichTextEditor 초기화 전에)
+  let initialized = $state(false);
+  $effect(() => {
+    if (!initialized && data.post) {
+      if (data.post.title !== undefined) title = data.post.title;
+      if (data.post.content !== undefined) {
+        content = data.post.content;
+        contentText = plainTextFromHtml(content);
+      }
+      if (data.post.author !== undefined) author = data.post.author;
+      initialized = true;
+    }
+  });
+
+  // form 업데이트 시 동기화 (서버 에러 후 복원용)
   $effect(() => {
     if (form?.values?.title !== undefined) title = form.values.title;
-    else if (data.post?.title !== undefined) title = data.post.title;
-    
-    if (form?.values?.content !== undefined) content = form.values.content;
-    else if (data.post?.content !== undefined) content = data.post.content;
-    
-    // 검증용 텍스트도 동기화
-    contentText = plainTextFromHtml(content);
-    
+    if (form?.values?.content !== undefined) {
+      content = form.values.content;
+      contentText = plainTextFromHtml(content);
+    }
     if (form?.values?.author !== undefined) author = form.values.author;
-    else if (data.post?.author !== undefined) author = data.post.author;
-    
     if (form?.error !== undefined) error = form.error;
     if (form?.fieldErrors !== undefined) fieldErrors = form.fieldErrors || {};
   });

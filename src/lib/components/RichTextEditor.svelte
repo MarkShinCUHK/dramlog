@@ -96,12 +96,20 @@
 
   // 외부에서 value가 바뀌면 에디터에 반영 (무한 루프 방지용)
   let lastExternalValue = $state('');
+  let isInitialized = $state(false);
   $effect(() => {
     if (!editorState.editor) return;
     const next = value ?? '';
     const current = editorState.editor.getHTML();
 
-    if (next !== current && next !== lastExternalValue) {
+    // 초기화 직후에는 lastExternalValue 체크를 무시하고 무조건 업데이트
+    if (!isInitialized) {
+      if (next !== current) {
+        lastExternalValue = next;
+        editorState.editor.commands.setContent(next, { emitUpdate: false });
+        isInitialized = true;
+      }
+    } else if (next !== current && next !== lastExternalValue) {
       lastExternalValue = next;
       editorState.editor.commands.setContent(next, { emitUpdate: false });
     }
@@ -177,8 +185,10 @@
       },
       onUpdate({ editor }) {
         // 외부 value sync 루프 방지를 위해 최신 HTML을 기록
-        lastExternalValue = editor.getHTML();
-        onChange?.(editor.getHTML(), editor.getText());
+        const html = editor.getHTML();
+        lastExternalValue = html;
+        isInitialized = true;
+        onChange?.(html, editor.getText());
       }
     });
 
