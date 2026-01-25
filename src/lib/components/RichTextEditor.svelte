@@ -85,7 +85,24 @@
 
     // Blob URL 생성하여 에디터에 삽입
     const blobUrl = URL.createObjectURL(file);
-    editorState.editor.chain().focus().setImage({ src: blobUrl }).run();
+    // 이미지 삽입 시 원본 크기를 width/height로 설정
+    const img = new Image();
+    img.onload = () => {
+      if (editorState.editor) {
+        editorState.editor.chain().focus().setImage({ 
+          src: blobUrl,
+          width: img.naturalWidth,
+          height: img.naturalHeight
+        }).run();
+      }
+    };
+    img.onerror = () => {
+      // 이미지 로드 실패 시에도 기본 삽입
+      if (editorState.editor) {
+        editorState.editor.chain().focus().setImage({ src: blobUrl }).run();
+      }
+    };
+    img.src = blobUrl;
 
     // 부모 컴포넌트에 이미지 파일 정보 전달 (Blob URL과 File 객체 매핑)
     onImageAdd?.(blobUrl, file);
@@ -104,7 +121,9 @@
 
     // 초기화 직후에는 lastExternalValue 체크를 무시하고 무조건 업데이트
     if (!isInitialized) {
-      if (next !== current) {
+      // 초기화 시에는 무조건 업데이트 (이미지 포함)
+      // next가 비어있지 않거나, current와 다를 때 업데이트
+      if (next || next !== current) {
         lastExternalValue = next;
         editorState.editor.commands.setContent(next, { emitUpdate: false });
         isInitialized = true;
@@ -118,9 +137,11 @@
   onMount(() => {
     if (!editorRoot) return;
 
+    // 초기 content는 value가 있으면 사용, 없으면 빈 문자열
+    // 나중에 $effect에서 value가 변경되면 업데이트됨
     editorState.editor = new Editor({
       element: editorRoot,
-      content: value || '',
+      content: value ?? '',
       extensions: [
         StarterKit.configure({ 
           link: false, 

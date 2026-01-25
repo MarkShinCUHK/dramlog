@@ -3,6 +3,7 @@ import type { PageServerLoad, Actions } from './$types';
 import { getPostById, updatePost } from '$lib/server/supabase/queries/posts';
 import { getUser, getSession, getUserOrCreateAnonymous } from '$lib/server/supabase/auth';
 import { convertBlobUrlsToStorageUrls } from '$lib/server/supabase/queries/images.js';
+import { deleteImage } from '$lib/server/supabase/queries/storage.js';
 
 function plainTextFromHtml(html: string) {
   return (html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();

@@ -22,19 +22,27 @@
       setTimeout(() => {
         const postContent = document.querySelector('.post-content');
         if (postContent) {
-          const images = postContent.querySelectorAll('img.editor-image');
-          images.forEach((img) => {
+          // 모든 이미지 처리 (editor-image 클래스 유무와 관계없이)
+          const allImages = postContent.querySelectorAll('img');
+          
+          allImages.forEach((img) => {
             const htmlWidth = img.getAttribute('width');
             const htmlHeight = img.getAttribute('height');
-            if (htmlWidth) {
+            
+            // width/height 속성이 있으면 정확히 적용
+            if (htmlWidth && htmlHeight) {
               img.style.setProperty('width', `${htmlWidth}px`, 'important');
-            }
-            if (htmlHeight) {
               img.style.setProperty('height', `${htmlHeight}px`, 'important');
+              // object-fit도 명시적으로 설정하여 비율 무시
+              img.style.setProperty('object-fit', 'fill', 'important');
+            } else {
+              // width/height 속성이 없는 경우: max-width로 제한하여 너무 크게 보이지 않도록
+              img.style.setProperty('max-width', '100%', 'important');
+              img.style.setProperty('height', 'auto', 'important');
             }
           });
         }
-      }, 100);
+      }, 200);
     }
   });
 
