@@ -26,6 +26,11 @@
           const allImages = postContent.querySelectorAll('img');
           
           allImages.forEach((img) => {
+            // lazy loading 적용 (이미 적용되어 있지 않은 경우만)
+            if (!img.hasAttribute('loading')) {
+              img.setAttribute('loading', 'lazy');
+            }
+            
             const htmlWidth = img.getAttribute('width');
             const htmlHeight = img.getAttribute('height');
             

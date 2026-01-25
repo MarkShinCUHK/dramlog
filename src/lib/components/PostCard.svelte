@@ -39,7 +39,29 @@
     return null;
   }
 
-  let thumbnailUrl = $derived(getFirstImageUrl(post?.content));
+  // 썸네일용 이미지 URL 생성 (Supabase Storage 이미지 변환 사용)
+  function getThumbnailUrl(originalUrl: string | null): string | null {
+    if (!originalUrl) return null;
+    
+    // Supabase Storage URL인지 확인 (storage.googleapis.com 또는 supabase.co)
+    const isSupabaseStorage = originalUrl.includes('storage.googleapis.com') || 
+                              originalUrl.includes('supabase.co/storage');
+    
+    if (isSupabaseStorage) {
+      // 이미 쿼리 파라미터가 있는지 확인
+      const hasQuery = originalUrl.includes('?');
+      // 썸네일용으로 너비 1000px로 리사이즈 (비율 유지, cover 모드로 크롭)
+      // aspect-[16/10] 비율에 맞춰서 높이도 계산: 1000 * 10/16 = 625
+      // 고해상도 디스플레이를 고려하여 해상도 상향 조정
+      return `${originalUrl}${hasQuery ? '&' : '?'}width=1000&height=625&resize=cover`;
+    }
+    
+    // Supabase Storage가 아니면 원본 URL 반환 (외부 이미지 등)
+    return originalUrl;
+  }
+
+  let firstImageUrl = $derived(getFirstImageUrl(post?.content));
+  let thumbnailUrl = $derived(getThumbnailUrl(firstImageUrl));
 </script>
 
 <article class="group overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5 transition hover:-translate-y-0.5 hover:shadow-lg">
