@@ -10,6 +10,7 @@ export type PostRow = {
   user_id?: string | null;
   is_anonymous?: boolean | null;
   created_at: string; // ISO 8601 timestamptz
+  view_count?: number | null;
   // 선택적 필드들 (스키마에 없어도 안전하게 처리)
   like_count?: number | null;
   comment_count?: number | null;

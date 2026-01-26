@@ -655,8 +655,13 @@ Tailwind 기본 간격 사용:
      - 좋아요 쿼리 함수: `getLikeCount()`, `isLiked()`, `toggleLike()` (`src/lib/server/supabase/queries/likes.ts`)
      - LikeButton 컴포넌트: 하트 아이콘, 좋아요 개수 표시, 클릭 시 토글
      - 게시글 상세 페이지(`/posts/[id]`)에 LikeButton 컴포넌트 통합
-     - 로그인 사용자만 좋아요 가능
-     - 서버 액션: `toggleLike` (`/posts/[id]/+page.server.ts`)
+   - 로그인 사용자만 좋아요 가능
+   - 서버 액션: `toggleLike` (`/posts/[id]/+page.server.ts`)
+
+5. ✅ **조회수 집계**
+   - `posts.view_count` 컬럼 추가 (`supabase-schema.sql`)
+   - `increment_post_view()` 함수로 조회수 증가 (RLS 우회)
+   - 쿠키 기반 중복 방지 (24시간)
 
 ### MVP 6단계: UI/UX 개선 (완료 ✅)
 **목표**: 사용자 경험 향상 및 반응형 최적화
@@ -978,4 +983,4 @@ CREATE TABLE posts (
 
 ---
 
-**마지막 업데이트**: 2026-01-23 (코드 리뷰 규칙 및 이미지 압축 기능 추가)
+**마지막 업데이트**: 2026-01-23 (코드 리뷰 규칙, 이미지 압축, 조회수 집계 추가)

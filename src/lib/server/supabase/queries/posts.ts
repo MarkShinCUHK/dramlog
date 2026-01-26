@@ -149,7 +149,7 @@ function mapRowToPost(row: PostRow): Post {
     isAnonymous: row.is_anonymous ?? false,
     // 선택적 필드들 안전하게 처리
     likes: row.like_count ?? undefined,
-    views: undefined, // 현재 스키마에 없음
+    views: row.view_count ?? 0,
   };
 }
 
@@ -299,6 +299,24 @@ export async function getPostById(id: string): Promise<Post | null> {
     return mapRowToPost(data);
   } catch (error) {
     console.error('게시글 조회 오류:', error);
+    return null;
+  }
+}
+
+/**
+ * 게시글 조회수 증가 (RLS 우회 함수 사용)
+ */
+export async function incrementPostView(postId: string): Promise<number | null> {
+  try {
+    const supabase = createSupabaseClient();
+    const { data, error } = await supabase.rpc('increment_post_view', { p_post_id: postId });
+    if (error) {
+      console.error('조회수 증가 오류:', error);
+      return null;
+    }
+    return typeof data === 'number' ? data : null;
+  } catch (error) {
+    console.error('조회수 증가 오류:', error);
     return null;
   }
 }

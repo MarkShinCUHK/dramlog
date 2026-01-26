@@ -275,8 +275,13 @@ src/
    - ✅ **구현 완료**:
      - 좋아요 쿼리 함수: `getLikeCount()`, `isLiked()`, `toggleLike()` (`src/lib/server/supabase/queries/likes.ts`)
      - LikeButton 컴포넌트: 하트 아이콘, 좋아요 개수 표시, 클릭 시 토글
-     - 게시글 상세 페이지(`/posts/[id]`)에 LikeButton 컴포넌트 통합
-     - 로그인 사용자만 좋아요 가능
+   - 게시글 상세 페이지(`/posts/[id]`)에 LikeButton 컴포넌트 통합
+   - 로그인 사용자만 좋아요 가능
+
+5. ✅ **조회수 집계**
+   - `posts` 테이블에 `view_count` 컬럼 추가
+   - `increment_post_view()` 함수로 안전하게 증가 (RLS 우회)
+   - 쿠키 기반 중복 방지 (24시간)
 
 ### MVP 7단계: Supabase Anonymous Auth + RLS 설정 (완료 ✅)
 1. ✅ **Supabase Anonymous Auth 구현**
@@ -522,4 +527,4 @@ src/
 
 ## 추가 참조
 - 상세 가이드라인: `web-dev-guidelines.md` 참조
-- 마지막 업데이트: 2026-01-23 (이미지 압축 기능 추가)
+- 마지막 업데이트: 2026-01-23 (이미지 압축 및 조회수 집계 추가)

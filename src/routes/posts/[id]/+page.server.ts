@@ -1,5 +1,5 @@
 import { error, fail, redirect } from '@sveltejs/kit';
-import { getPostById, deletePost } from '$lib/server/supabase/queries/posts';
+import { getPostById, deletePost, incrementPostView } from '$lib/server/supabase/queries/posts';
 import { getUser, getSession, getUserOrCreateAnonymous } from '$lib/server/supabase/auth';
 import { listComments } from '$lib/server/supabase/queries/comments';
 import { getLikeCount, isLiked } from '$lib/server/supabase/queries/likes';
@@ -21,6 +21,19 @@ export async function load({ params, cookies }) {
 
     // 익명 글 판단: post.isAnonymous 사용
     const isAnonymousPost = post.isAnonymous ?? false;
+
+    const viewCookieKey = `viewed_${postId}`;
+    let viewCount = post.views ?? 0;
+    if (!cookies.get(viewCookieKey)) {
+      const updatedCount = await incrementPostView(postId);
+      if (typeof updatedCount === 'number') {
+        viewCount = updatedCount;
+      }
+      cookies.set(viewCookieKey, '1', {
+        path: '/',
+        maxAge: 60 * 60 * 24
+      });
+    }
 
     // 댓글과 좋아요 정보 로드
     const user = await getUser(cookies);
@@ -49,7 +62,10 @@ export async function load({ params, cookies }) {
     // 조회수 증가는 MVP 단계에서 제외 (필요시 추후 추가)
 
     return {
-      post,
+      post: {
+        ...post,
+        views: viewCount
+      },
       postHtml: sanitizePostHtml(post.content),
       comments,
       likeCount,
