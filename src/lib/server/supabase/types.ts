@@ -79,3 +79,22 @@ export type BookmarkRow = {
   user_id: string; // UUID
   created_at: string; // ISO 8601 timestamptz
 };
+
+/**
+ * Supabase profiles 테이블의 row 타입
+ */
+export type ProfileRow = {
+  user_id: string; // UUID
+  nickname?: string | null;
+  bio?: string | null;
+  avatar_url?: string | null;
+  updated_at: string; // ISO 8601 timestamptz
+};
+
+export type Profile = {
+  userId: string;
+  nickname: string | null;
+  bio: string | null;
+  avatarUrl: string | null;
+  updatedAt: string;
+};

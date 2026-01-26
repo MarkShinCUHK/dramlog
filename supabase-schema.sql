@@ -103,6 +103,15 @@ CREATE TABLE IF NOT EXISTS bookmarks (
   UNIQUE(post_id, user_id) -- 중복 북마크 방지
 );
 
+-- profiles 테이블 생성 (프로필)
+CREATE TABLE IF NOT EXISTS profiles (
+  user_id UUID PRIMARY KEY, -- auth.users 참조 (FK는 선택사항)
+  nickname TEXT,
+  bio TEXT,
+  avatar_url TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- 인덱스 생성
 CREATE INDEX IF NOT EXISTS idx_comments_post_id ON comments(post_id);
 CREATE INDEX IF NOT EXISTS idx_comments_created_at ON comments(created_at DESC);
@@ -111,6 +120,7 @@ CREATE INDEX IF NOT EXISTS idx_likes_post_id ON likes(post_id);
 CREATE INDEX IF NOT EXISTS idx_likes_user_id ON likes(user_id);
 CREATE INDEX IF NOT EXISTS idx_bookmarks_post_id ON bookmarks(post_id);
 CREATE INDEX IF NOT EXISTS idx_bookmarks_user_id ON bookmarks(user_id);
+CREATE INDEX IF NOT EXISTS idx_profiles_updated_at ON profiles(updated_at DESC);
 
 -- RLS (Row Level Security) 설정
 -- 
@@ -131,6 +141,7 @@ ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE likes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bookmarks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
 -- 2. posts 테이블 정책
 -- 읽기: 모든 사용자 (익명 포함) 읽기 가능
@@ -225,6 +236,22 @@ WITH CHECK (auth.role() = 'authenticated' AND auth.uid() = user_id);
 CREATE POLICY "Users can delete own bookmarks"
 ON bookmarks FOR DELETE
 USING (auth.uid() = user_id);
+
+-- 6. profiles 테이블 정책
+-- 읽기: 모든 사용자
+CREATE POLICY "Anyone can read profiles"
+ON profiles FOR SELECT
+USING (true);
+
+-- 작성/수정: 본인만
+CREATE POLICY "Users can insert own profile"
+ON profiles FOR INSERT
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own profile"
+ON profiles FOR UPDATE
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
 
 -- Storage 버킷 생성 (게시글 이미지용)
 -- Supabase 대시보드에서 Storage → Create bucket으로 생성하거나 아래 SQL 실행
