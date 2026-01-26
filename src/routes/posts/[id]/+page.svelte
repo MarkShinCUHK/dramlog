@@ -172,6 +172,11 @@
             ondeleted={(id) => {
               if (id) comments = comments.filter((c) => c.id !== id);
             }}
+            onupdated={(updated) => {
+              if (updated) {
+                comments = comments.map((comment) => comment.id === updated.id ? updated : comment);
+              }
+            }}
           />
         </div>
       </section>

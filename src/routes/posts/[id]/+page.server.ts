@@ -170,6 +170,48 @@ export const actions = {
       });
     }
   },
+  updateComment: async ({ request, params, cookies }) => {
+    try {
+      const user = await getUser(cookies);
+      if (!user || user.isAnonymous) {
+        return fail(401, { error: '댓글을 수정하려면 로그인이 필요합니다.' });
+      }
+
+      const sessionTokens = getSession(cookies);
+      if (!sessionTokens) {
+        return fail(401, { error: '로그인 세션이 없습니다. 다시 로그인해주세요.' });
+      }
+
+      const formData = await request.formData();
+      const commentId = formData.get('commentId')?.toString();
+      const content = formData.get('content')?.toString();
+
+      if (!commentId) {
+        return fail(400, {
+          error: '댓글 ID가 없습니다.'
+        });
+      }
+
+      if (!content || content.trim().length === 0) {
+        return fail(400, {
+          error: '댓글 내용을 입력해주세요.'
+        });
+      }
+
+      const { updateComment } = await import('$lib/server/supabase/queries/comments');
+      const comment = await updateComment(commentId, content, user.id, sessionTokens);
+
+      return { comment };
+    } catch (err) {
+      if (err && typeof err === 'object' && 'status' in err) {
+        throw err;
+      }
+      console.error('댓글 수정 오류:', err);
+      return fail(500, {
+        error: err instanceof Error ? err.message : '댓글 수정 중 오류가 발생했습니다.'
+      });
+    }
+  },
   toggleLike: async ({ request, params, cookies }) => {
     try {
       const postId = params.id;

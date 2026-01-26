@@ -4,10 +4,12 @@
   
   let { 
     comments = [],
-    ondeleted
+    ondeleted,
+    onupdated
   }: {
     comments?: Comment[];
     ondeleted?: (id: string) => void;
+    onupdated?: (comment: Comment) => void;
   } = $props();
 </script>
 
@@ -17,6 +19,7 @@
       <CommentItem
         {comment}
         ondeleted={ondeleted}
+        onupdated={onupdated}
       />
     {/each}
   {:else}
