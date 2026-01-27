@@ -26,27 +26,33 @@
     </div>
     <div class="mb-4">
       <!-- 좁은 화면: 2줄 -->
-      <pre class="md:hidden text-[9px] xs:text-[10px] sm:text-xs font-mono leading-tight text-whiskey-900 text-center whitespace-pre mx-auto">██╗    ██╗██╗  ██╗██╗███████╗██╗  ██╗██╗   ██╗
+      <div class="md:hidden overflow-x-auto">
+        <div class="flex flex-col items-center gap-2">
+          <pre class="inline-block w-max text-[9px] xs:text-[10px] sm:text-xs font-mono leading-tight text-whiskey-900 text-left whitespace-pre">██╗    ██╗██╗  ██╗██╗███████╗██╗  ██╗██╗   ██╗
 ██║    ██║██║  ██║██║██╔════╝██║ ██╔╝╚██╗ ██╔╝
 ██║ █╗ ██║███████║██║███████╗█████╔╝  ╚████╔╝
 ██║███╗██║██╔══██║██║╚════██║██╔═██╗   ╚██╔╝
 ╚███╔███╔╝██║  ██║██║███████║██║  ██╗   ██║
  ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝╚══════╝╚═╝  ╚═╝   ╚═╝
-
-██╗      ██████╗  ██████╗ 
+</pre>
+          <pre class="inline-block w-max text-[9px] xs:text-[10px] sm:text-xs font-mono leading-tight text-whiskey-900 text-left whitespace-pre">██╗      ██████╗  ██████╗ 
 ██║     ██╔═══██╗██╔════╝ 
 ██║     ██║   ██║██║  ███╗
 ██║     ██║   ██║██║   ██║
 ███████╗╚██████╔╝╚██████╔╝
 ╚══════╝ ╚═════╝  ╚═════╝</pre>
+        </div>
+      </div>
 
       <!-- 넓은 화면: 1줄 -->
-      <pre class="hidden md:block text-[10px] md:text-sm lg:text-base font-mono leading-tight text-whiskey-900 text-center whitespace-pre mx-auto">██╗    ██╗██╗  ██╗██╗███████╗██╗  ██╗██╗   ██╗██╗      ██████╗  ██████╗ 
+      <div class="hidden md:block overflow-x-auto">
+        <pre class="inline-block w-max text-[10px] md:text-sm lg:text-base font-mono leading-tight text-whiskey-900 text-left whitespace-pre mx-auto">██╗    ██╗██╗  ██╗██╗███████╗██╗  ██╗██╗   ██╗██╗      ██████╗  ██████╗ 
 ██║    ██║██║  ██║██║██╔════╝██║ ██╔╝╚██╗ ██╔╝██║     ██╔═══██╗██╔════╝ 
 ██║ █╗ ██║███████║██║███████╗█████╔╝  ╚████╔╝ ██║     ██║   ██║██║  ███╗
 ██║███╗██║██╔══██║██║╚════██║██╔═██╗   ╚██╔╝  ██║     ██║   ██║██║   ██║
 ╚███╔███╔╝██║  ██║██║███████║██║  ██╗   ██║   ███████╗╚██████╔╝╚██████╔╝
  ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝╚══════╝╚═╝  ╚═╝   ╚═╝   ╚══════╝ ╚═════╝  ╚═════╝</pre>
+      </div>
     </div>
     <p class="text-lg sm:text-xl text-gray-700 max-w-2xl mx-auto">
       위스키를 사랑하는 사람들이 모여 리뷰와 정보를 공유하는 공간입니다.
