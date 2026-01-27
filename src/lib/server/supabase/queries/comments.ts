@@ -1,4 +1,4 @@
-import { createSupabaseClient, createSupabaseClientWithSession } from '../client.js';
+import { createSupabaseClientForSession } from '../client.js';
 import type { Comment, CommentRow } from '../types.js';
 import type { SessionTokens } from '../auth.js';
 
@@ -33,9 +33,7 @@ function mapRowToComment(row: CommentRow): Comment {
  */
 export async function listComments(postId: string, sessionTokens?: SessionTokens): Promise<Comment[]> {
   try {
-    const supabase = sessionTokens
-      ? createSupabaseClientWithSession(sessionTokens)
-      : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
     
     const { data, error } = await supabase
       .from('comments')
@@ -81,9 +79,7 @@ export async function createComment(
   sessionTokens?: SessionTokens
 ): Promise<Comment> {
   try {
-    const supabase = sessionTokens
-      ? createSupabaseClientWithSession(sessionTokens)
-      : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
 
     if (!content || content.trim().length === 0) {
       throw new Error('댓글 내용을 입력해주세요.');
@@ -125,9 +121,7 @@ export async function updateComment(
   sessionTokens?: SessionTokens
 ): Promise<Comment> {
   try {
-    const supabase = sessionTokens
-      ? createSupabaseClientWithSession(sessionTokens)
-      : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
 
     if (!content || content.trim().length === 0) {
       throw new Error('댓글 내용을 입력해주세요.');
@@ -183,9 +177,7 @@ export async function deleteComment(
   sessionTokens?: SessionTokens
 ): Promise<void> {
   try {
-    const supabase = sessionTokens
-      ? createSupabaseClientWithSession(sessionTokens)
-      : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
 
     // 본인 댓글인지 확인
     const { data: existingComment, error: checkError } = await supabase

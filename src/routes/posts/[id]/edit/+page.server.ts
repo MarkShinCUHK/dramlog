@@ -1,13 +1,11 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import { getPostById, updatePost } from '$lib/server/supabase/queries/posts';
+import { listWhiskies } from '$lib/server/supabase/queries/whiskies';
 import { getUser, getSession, getUserOrCreateAnonymous } from '$lib/server/supabase/auth';
-import { convertBlobUrlsToStorageUrls } from '$lib/server/supabase/queries/images.js';
+import { convertBlobUrlsToStorageUrlsWithMap } from '$lib/server/supabase/queries/images.js';
 import { deleteImage } from '$lib/server/supabase/queries/storage.js';
-
-function plainTextFromHtml(html: string) {
-  return (html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-}
+import { parseTags, validatePostInput } from '$lib/server/validation/posts';
 
 export const load: PageServerLoad = async ({ params, cookies }) => {
   try {
@@ -43,8 +41,10 @@ export const load: PageServerLoad = async ({ params, cookies }) => {
       }
     }
 
+    const whiskies = await listWhiskies(200);
     return {
-      post
+      post,
+      whiskies
     };
   } catch (err) {
     // SvelteKit error는 그대로 전달
@@ -86,6 +86,9 @@ export const actions: Actions = {
       const content = formData.get('content')?.toString();
       const author = formData.get('author')?.toString();
       const editPassword = formData.get('editPassword')?.toString();
+      const tags = formData.get('tags')?.toString() ?? '';
+      const whiskyId = formData.get('whiskyId')?.toString() ?? '';
+      let thumbnailUrl = formData.get('thumbnailUrl')?.toString() ?? '';
       console.log('[EDIT] 폼 데이터:', { 
         title: title?.substring(0, 50), 
         contentLength: content?.length,
@@ -96,20 +99,7 @@ export const actions: Actions = {
       const user = await getUser(cookies);
       console.log('[EDIT] 사용자:', user ? (user.email || '익명') : '없음');
       const isOwner = !!user && !!post.userId && user.id === post.userId;
-
-      // 필드별 유효성 검사
-      const fieldErrors: Record<string, string> = {};
-      let hasErrors = false;
-
-      if (!title || title.trim().length === 0) {
-        fieldErrors.title = '제목을 입력해주세요.';
-        hasErrors = true;
-      }
-
-      if (!content || plainTextFromHtml(content).length === 0) {
-        fieldErrors.content = '내용을 입력해주세요.';
-        hasErrors = true;
-      }
+      const isLoggedIn = !!user && !user.isAnonymous && !!user.email;
 
       // 로그인 글: 작성자만 수정 가능 (비밀번호 없음)
       if (!isAnonymousPost && !isOwner) {
@@ -120,11 +110,22 @@ export const actions: Actions = {
       if (isAnonymousPost && user && user.email) {
         return fail(403, { error: '익명 게시글은 로그아웃 상태에서 비밀번호로만 수정할 수 있습니다.' });
       }
-      
-      if (isAnonymousPost && !editPassword) {
+
+      const { fieldErrors, hasErrors: initialHasErrors } = validatePostInput(
+        { title, content },
+        {
+          isLoggedIn,
+          isAnonymousPost,
+          editPassword,
+          requirePasswordConfirm: false
+        }
+      );
+
+      if (isAnonymousPost && (!editPassword || editPassword.length < 4)) {
         fieldErrors.editPassword = '비밀번호를 입력해주세요.';
-        hasErrors = true;
       }
+
+      const hasErrors = initialHasErrors || Object.keys(fieldErrors).length > 0;
 
       if (hasErrors) {
         return fail(400, {
@@ -133,7 +134,10 @@ export const actions: Actions = {
           values: {
             title: title || '',
             content: content || '',
-            author: author || ''
+            author: author || '',
+            tags: tags || '',
+            whiskyId: whiskyId || '',
+            thumbnailUrl: thumbnailUrl || ''
           }
         });
       }
@@ -221,7 +225,7 @@ export const actions: Actions = {
             startIndex: existingImageCount + 1
           });
           
-          finalContent = await convertBlobUrlsToStorageUrls(
+          const { html, urlMap } = await convertBlobUrlsToStorageUrlsWithMap(
             content || '',
             images,
             blobUrls,
@@ -230,6 +234,11 @@ export const actions: Actions = {
             sessionTokens, // sessionTokens 그대로 전달
             existingImageCount + 1 // 기존 이미지 개수 + 1부터 시작
           );
+          finalContent = html;
+          if (thumbnailUrl && thumbnailUrl.startsWith('blob:')) {
+            const mapped = urlMap.get(thumbnailUrl);
+            if (mapped) thumbnailUrl = mapped;
+          }
           
           console.log('[EDIT] 이미지 업로드 완료, 변환된 HTML 길이:', finalContent.length);
         } catch (error) {
@@ -244,7 +253,10 @@ export const actions: Actions = {
             values: {
               title: title || '',
               content: content || '',
-              author: author || ''
+              author: author || '',
+              tags: tags || '',
+              whiskyId: whiskyId || '',
+              thumbnailUrl: thumbnailUrl || ''
             }
           });
         }
@@ -262,6 +274,10 @@ export const actions: Actions = {
       const newImageUrls = newMatches
         .map((m) => m[1])
         .filter((url) => url && !url.startsWith('blob:')); // Blob URL 제외
+
+      if (thumbnailUrl && !newImageUrls.includes(thumbnailUrl)) {
+        thumbnailUrl = newImageUrls[0] || '';
+      }
 
       // 삭제된 이미지 경로 계산 (기존에 있지만 새에는 없는 이미지)
       const deletedImageUrls = existingImageUrls.filter((url) => !newImageUrls.includes(url));
@@ -302,7 +318,10 @@ export const actions: Actions = {
         {
         title,
         content: finalContent, // 변환된 HTML 사용
-          author_name: isAnonymousPost ? (author || undefined) : (user?.nickname || user?.email || undefined)
+          author_name: isAnonymousPost ? (author || undefined) : (user?.nickname || user?.email || undefined),
+          tags: parseTags(tags),
+          whisky_id: whiskyId || null,
+          thumbnail_url: thumbnailUrl || null
         },
         {
           userId: isAnonymousPost ? null : (user?.id ?? null), // 익명 글은 항상 null

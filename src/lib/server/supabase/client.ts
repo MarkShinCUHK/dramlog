@@ -40,3 +40,11 @@ export function createSupabaseClientWithSession(sessionTokens: { accessToken: st
     }
   });
 }
+
+/**
+ * 세션 유무에 따라 적절한 Supabase 클라이언트를 반환
+ * 쿼리 계층에서 삼항 연산자 중복을 줄이기 위한 헬퍼
+ */
+export function createSupabaseClientForSession(sessionTokens?: { accessToken: string; refreshToken?: string } | null) {
+  return sessionTokens ? createSupabaseClientWithSession(sessionTokens) : createSupabaseClient();
+}

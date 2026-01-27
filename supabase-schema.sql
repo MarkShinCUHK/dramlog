@@ -3,7 +3,7 @@
 -- 사용 방법:
 -- 1. Supabase 대시보드에서 SQL Editor 열기
 -- 2. 아래 SQL을 복사하여 실행
--- 3. RLS는 MVP 단계에서 비활성화 (아래 안내 참조)
+-- 3. RLS는 MVP 단계에서 활성화하여 사용 (아래 정책 참고)
 
 -- posts 테이블 생성
 CREATE TABLE IF NOT EXISTS posts (
@@ -18,6 +18,14 @@ CREATE TABLE IF NOT EXISTS posts (
   user_id UUID,
   -- 익명 글 여부 (명확한 판단을 위해)
   is_anonymous BOOLEAN DEFAULT false,
+  -- 조회수
+  view_count INTEGER NOT NULL DEFAULT 0,
+  -- 태그 (검색/필터)
+  tags TEXT[] DEFAULT '{}'::TEXT[],
+  -- 위스키 연결
+  whisky_id UUID,
+  -- 대표 이미지 URL
+  thumbnail_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -32,6 +40,23 @@ ALTER TABLE posts
   ADD COLUMN IF NOT EXISTS is_anonymous BOOLEAN DEFAULT false;
 
 ALTER TABLE posts
+  ADD COLUMN IF NOT EXISTS view_count INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE posts
+  ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}'::TEXT[];
+
+ALTER TABLE posts
+  ADD COLUMN IF NOT EXISTS whisky_id UUID;
+
+ALTER TABLE posts
+  ADD COLUMN IF NOT EXISTS thumbnail_url TEXT;
+
+-- (선택) whisky_id FK는 위스키 테이블 생성 후 적용
+-- ALTER TABLE posts
+--   ADD CONSTRAINT posts_whisky_id_fkey
+--   FOREIGN KEY (whisky_id) REFERENCES whiskies(id) ON DELETE SET NULL;
+
+ALTER TABLE posts
   ALTER COLUMN author_name SET DEFAULT '익명의 위스키 러버';
 
 -- (선택) user_id FK는 Supabase Auth 사용 시에만 적용 권장
@@ -42,6 +67,44 @@ ALTER TABLE posts
 -- 인덱스 생성 (성능 최적화)
 CREATE INDEX IF NOT EXISTS idx_posts_created_at ON posts(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_posts_author_name ON posts(author_name);
+CREATE INDEX IF NOT EXISTS idx_posts_tags ON posts USING GIN (tags);
+CREATE INDEX IF NOT EXISTS idx_posts_whisky_id ON posts(whisky_id);
+
+-- whiskies 테이블 생성 (위스키 DB)
+CREATE TABLE IF NOT EXISTS whiskies (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  brand TEXT,
+  type TEXT,
+  region TEXT,
+  age INTEGER,
+  abv NUMERIC(4,1),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_whiskies_name ON whiskies(name);
+CREATE INDEX IF NOT EXISTS idx_whiskies_brand ON whiskies(brand);
+
+-- 조회수 증가 함수 (RLS 우회용, 서버에서 호출)
+CREATE OR REPLACE FUNCTION increment_post_view(p_post_id UUID)
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  new_count INTEGER;
+BEGIN
+  UPDATE posts
+  SET view_count = COALESCE(view_count, 0) + 1
+  WHERE id = p_post_id
+  RETURNING view_count INTO new_count;
+
+  RETURN new_count;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION increment_post_view(UUID) TO anon, authenticated;
 
 -- comments 테이블 생성 (댓글)
 CREATE TABLE IF NOT EXISTS comments (
@@ -62,12 +125,49 @@ CREATE TABLE IF NOT EXISTS likes (
   UNIQUE(post_id, user_id) -- 중복 좋아요 방지
 );
 
+-- notifications 테이블 생성 (알림)
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL, -- 알림 수신자
+  actor_id UUID NOT NULL, -- 알림 발생자
+  actor_name TEXT,
+  post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  comment_id UUID REFERENCES comments(id) ON DELETE SET NULL,
+  type TEXT NOT NULL CHECK (type IN ('comment', 'like')),
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- bookmarks 테이블 생성 (북마크)
+CREATE TABLE IF NOT EXISTS bookmarks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL, -- auth.users 참조 (FK는 선택사항)
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(post_id, user_id) -- 중복 북마크 방지
+);
+
+-- profiles 테이블 생성 (프로필)
+CREATE TABLE IF NOT EXISTS profiles (
+  user_id UUID PRIMARY KEY, -- auth.users 참조 (FK는 선택사항)
+  nickname TEXT,
+  bio TEXT,
+  avatar_url TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- 인덱스 생성
 CREATE INDEX IF NOT EXISTS idx_comments_post_id ON comments(post_id);
 CREATE INDEX IF NOT EXISTS idx_comments_created_at ON comments(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_comments_user_id ON comments(user_id);
 CREATE INDEX IF NOT EXISTS idx_likes_post_id ON likes(post_id);
 CREATE INDEX IF NOT EXISTS idx_likes_user_id ON likes(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_read_at ON notifications(read_at);
+CREATE INDEX IF NOT EXISTS idx_bookmarks_post_id ON bookmarks(post_id);
+CREATE INDEX IF NOT EXISTS idx_bookmarks_user_id ON bookmarks(user_id);
+CREATE INDEX IF NOT EXISTS idx_profiles_updated_at ON profiles(updated_at DESC);
 
 -- RLS (Row Level Security) 설정
 -- 
@@ -87,6 +187,9 @@ CREATE INDEX IF NOT EXISTS idx_likes_user_id ON likes(user_id);
 ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE likes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bookmarks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
 -- 2. posts 테이블 정책
 -- 읽기: 모든 사용자 (익명 포함) 읽기 가능
@@ -165,6 +268,54 @@ WITH CHECK (auth.role() = 'authenticated' AND auth.uid() = user_id);
 CREATE POLICY "Users can delete own likes"
 ON likes FOR DELETE
 USING (auth.uid() = user_id);
+
+-- 5. notifications 테이블 정책
+-- 읽기: 본인 알림만
+CREATE POLICY "Users can read own notifications"
+ON notifications FOR SELECT
+USING (auth.uid() = user_id);
+
+-- 작성: 알림 발생자만 (actor_id)
+CREATE POLICY "Users can insert notifications"
+ON notifications FOR INSERT
+WITH CHECK (auth.role() = 'authenticated' AND auth.uid() = actor_id);
+
+-- 수정: 본인 알림만 (읽음 처리)
+CREATE POLICY "Users can update own notifications"
+ON notifications FOR UPDATE
+USING (auth.uid() = user_id);
+
+-- 6. bookmarks 테이블 정책
+-- 읽기: 본인 북마크만
+CREATE POLICY "Users can read own bookmarks"
+ON bookmarks FOR SELECT
+USING (auth.uid() = user_id);
+
+-- 작성: 로그인 사용자만
+CREATE POLICY "Authenticated users can insert bookmarks"
+ON bookmarks FOR INSERT
+WITH CHECK (auth.role() = 'authenticated' AND auth.uid() = user_id);
+
+-- 삭제: 작성자 본인만
+CREATE POLICY "Users can delete own bookmarks"
+ON bookmarks FOR DELETE
+USING (auth.uid() = user_id);
+
+-- 7. profiles 테이블 정책
+-- 읽기: 모든 사용자
+CREATE POLICY "Anyone can read profiles"
+ON profiles FOR SELECT
+USING (true);
+
+-- 작성/수정: 본인만
+CREATE POLICY "Users can insert own profile"
+ON profiles FOR INSERT
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own profile"
+ON profiles FOR UPDATE
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
 
 -- Storage 버킷 생성 (게시글 이미지용)
 -- Supabase 대시보드에서 Storage → Create bucket으로 생성하거나 아래 SQL 실행

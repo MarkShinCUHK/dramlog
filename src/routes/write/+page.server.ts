@@ -1,11 +1,9 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { createPost } from '$lib/server/supabase/queries/posts';
+import { listWhiskies } from '$lib/server/supabase/queries/whiskies';
 import { getUser, getUserOrCreateAnonymous, getSession } from '$lib/server/supabase/auth';
-import { convertBlobUrlsToStorageUrls } from '$lib/server/supabase/queries/images.js';
-
-function plainTextFromHtml(html: string) {
-  return (html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-}
+import { convertBlobUrlsToStorageUrls, convertBlobUrlsToStorageUrlsWithMap } from '$lib/server/supabase/queries/images.js';
+import { parseTags, validatePostInput } from '$lib/server/validation/posts';
 
 export const actions = {
   create: async ({ request, cookies }) => {
@@ -14,46 +12,34 @@ export const actions = {
     let author = '';
     let editPassword = '';
     let editPasswordConfirm = '';
+    let tags = '';
+    let whiskyId = '';
+    let thumbnailUrl = '';
     try {
       const formData = await request.formData();
       title = formData.get('title')?.toString() ?? '';
       content = formData.get('content')?.toString() ?? '';
       author = formData.get('author')?.toString() ?? '';
+      tags = formData.get('tags')?.toString() ?? '';
+      whiskyId = formData.get('whiskyId')?.toString() ?? '';
+      thumbnailUrl = formData.get('thumbnailUrl')?.toString() ?? '';
       editPassword = formData.get('editPassword')?.toString() ?? '';
       editPasswordConfirm = formData.get('editPasswordConfirm')?.toString() ?? '';
-
-      // 필드별 유효성 검사
-      const fieldErrors: Record<string, string> = {};
-      let hasErrors = false;
-
-      if (!title || title.trim().length === 0) {
-        fieldErrors.title = '제목을 입력해주세요.';
-        hasErrors = true;
-      }
-
-      if (!content || plainTextFromHtml(content).length === 0) {
-        fieldErrors.content = '내용을 입력해주세요.';
-        hasErrors = true;
-      }
 
       // 익명 사용자도 세션을 가지도록 함 (RLS 정책 적용을 위해)
       const user = await getUserOrCreateAnonymous(cookies);
       const isLoggedIn = !user.isAnonymous && !!user.email;
 
-      if (!isLoggedIn) {
-        if (!editPassword || editPassword.length < 4) {
-          fieldErrors.editPassword = '비밀번호는 4자 이상으로 입력해주세요.';
-          hasErrors = true;
+      const { fieldErrors, hasErrors } = validatePostInput(
+        { title, content },
+        {
+          isLoggedIn,
+          isAnonymousPost: !isLoggedIn,
+          editPassword,
+          editPasswordConfirm,
+          requirePasswordConfirm: true
         }
-
-        if (!editPasswordConfirm) {
-          fieldErrors.editPasswordConfirm = '비밀번호 확인을 입력해주세요.';
-          hasErrors = true;
-        } else if (editPassword && editPassword !== editPasswordConfirm) {
-          fieldErrors.editPasswordConfirm = '비밀번호 확인이 일치하지 않습니다.';
-          hasErrors = true;
-        }
-      }
+      );
 
       if (hasErrors) {
         return fail(400, {
@@ -62,7 +48,10 @@ export const actions = {
           values: {
             title: title || '',
             content: content || '',
-            author: author || ''
+            author: author || '',
+            tags: tags || '',
+            whiskyId: whiskyId || '',
+            thumbnailUrl: thumbnailUrl || ''
           }
         });
       }
@@ -110,13 +99,17 @@ export const actions = {
           // 로그인 사용자는 닉네임을 작성자명으로 강제
           author_name: isLoggedIn ? (user?.nickname || user?.email || undefined) : (author || undefined),
           edit_password: isLoggedIn ? undefined : editPassword,
-          user_id: user.id // 익명 사용자도 익명 세션의 user_id를 저장
+          user_id: user.id, // 익명 사용자도 익명 세션의 user_id를 저장
+          whisky_id: whiskyId || null,
+          thumbnail_url: thumbnailUrl || null,
+          tags: parseTags(tags)
         },
         accessToken
       );
 
       // Blob URL을 Storage URL로 변환 (postId 사용)
       let finalContent = content;
+      const initialThumbnailUrl = thumbnailUrl;
       if (images.length > 0 && blobUrls.length > 0) {
         if (!sessionTokens) {
           // console.error('서버: sessionTokens가 없어서 이미지 업로드를 건너뜁니다.');
@@ -125,7 +118,7 @@ export const actions = {
         } else {
           try {
             // console.log('서버: 이미지 업로드 시작...');
-            finalContent = await convertBlobUrlsToStorageUrls(
+            const { html, urlMap } = await convertBlobUrlsToStorageUrlsWithMap(
               content || '',
               images,
               blobUrls,
@@ -133,15 +126,21 @@ export const actions = {
               post.id, // postId 전달
               sessionTokens
             );
+            finalContent = html;
+            if (thumbnailUrl && thumbnailUrl.startsWith('blob:')) {
+              const mapped = urlMap.get(thumbnailUrl);
+              if (mapped) thumbnailUrl = mapped;
+            }
             // console.log('서버: 이미지 업로드 완료, 변환된 HTML 길이:', finalContent.length);
             
             // 이미지 업로드가 완료되었으므로 게시글 내용 업데이트
-            if (finalContent !== content) {
+            if (finalContent !== content || thumbnailUrl !== initialThumbnailUrl) {
               const { updatePost } = await import('$lib/server/supabase/queries/posts');
               await updatePost(
                 post.id,
                 {
-                  content: finalContent
+                  content: finalContent,
+                  thumbnail_url: thumbnailUrl || null
                 },
                 {
                   editPassword: isLoggedIn ? undefined : editPassword,
@@ -169,13 +168,16 @@ export const actions = {
             return fail(500, {
               error: '이미지 업로드 중 오류가 발생했습니다.',
               fieldErrors: {},
-              values: {
-                title: title || '',
-                content: content || '',
-                author: author || ''
-              }
-            });
-          }
+            values: {
+              title: title || '',
+              content: content || '',
+              author: author || '',
+              tags: tags || '',
+              whiskyId: whiskyId || '',
+              thumbnailUrl: thumbnailUrl || ''
+            }
+          });
+        }
         }
       } else {
         // console.log('서버: 이미지가 없거나 Blob URL이 없어서 변환을 건너뜁니다.');
@@ -199,9 +201,17 @@ export const actions = {
         values: {
           title: title || '',
           content: content || '',
-          author: author || ''
+          author: author || '',
+          tags: tags || '',
+          whiskyId: whiskyId || '',
+          thumbnailUrl: thumbnailUrl || ''
         }
       });
     }
   }
 };
+
+export async function load() {
+  const whiskies = await listWhiskies(200);
+  return { whiskies };
+}

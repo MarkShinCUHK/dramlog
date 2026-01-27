@@ -3,6 +3,7 @@
   import { page } from '$app/stores';
   import { tick } from 'svelte';
   import LikeButton from '$lib/components/LikeButton.svelte';
+  import BookmarkButton from '$lib/components/BookmarkButton.svelte';
   import CommentList from '$lib/components/CommentList.svelte';
   import CommentForm from '$lib/components/CommentForm.svelte';
   import { showToast } from '$lib/stores/toast';
@@ -97,9 +98,40 @@
     <header class="mb-10">
       <h1 class="text-3xl sm:text-4xl font-bold text-whiskey-900 mb-6 leading-tight tracking-tight">{data.post.title}</h1>
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-sm text-gray-600">
-        <div class="flex items-center gap-4">
-          <span class="font-semibold text-gray-900">{data.post.author}</span>
-          <span class="text-gray-500">{data.post.createdAt}</span>
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center gap-4">
+            <span class="font-semibold text-gray-900">{data.post.author}</span>
+            <span class="text-gray-500">{data.post.createdAt}</span>
+          </div>
+          {#if data.whisky}
+            <div class="flex flex-wrap gap-2">
+              <span class="inline-flex items-center rounded-full bg-whiskey-100 px-3 py-1 text-xs font-semibold text-whiskey-800 ring-1 ring-whiskey-200">
+                {data.whisky.brand ? `${data.whisky.brand} · ${data.whisky.name}` : data.whisky.name}
+              </span>
+              {#if data.whisky.region}
+                <span class="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-600 ring-1 ring-black/10">
+                  {data.whisky.region}
+                </span>
+              {/if}
+              {#if data.whisky.age}
+                <span class="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-600 ring-1 ring-black/10">
+                  {data.whisky.age}년
+                </span>
+              {/if}
+            </div>
+          {/if}
+          {#if data.post.tags && data.post.tags.length > 0}
+            <div class="flex flex-wrap gap-2">
+              {#each data.post.tags as tag}
+                <a
+                  href={`/posts?tag=${encodeURIComponent(tag)}`}
+                  class="inline-flex items-center rounded-full bg-whiskey-50 px-3 py-1 text-xs font-semibold text-whiskey-700 ring-1 ring-whiskey-100"
+                >
+                  #{tag}
+                </a>
+              {/each}
+            </div>
+          {/if}
         </div>
         <div class="flex items-center gap-4">
           {#if data.post.views !== undefined}
@@ -109,6 +141,10 @@
             postId={data.post.id}
             likeCount={data.likeCount || 0}
             isLiked={data.isLiked || false}
+          />
+          <BookmarkButton
+            postId={data.post.id}
+            isBookmarked={data.isBookmarked || false}
           />
         </div>
       </div>
@@ -152,6 +188,11 @@
             comments={comments}
             ondeleted={(id) => {
               if (id) comments = comments.filter((c) => c.id !== id);
+            }}
+            onupdated={(updated) => {
+              if (updated) {
+                comments = comments.map((comment) => comment.id === updated.id ? updated : comment);
+              }
             }}
           />
         </div>

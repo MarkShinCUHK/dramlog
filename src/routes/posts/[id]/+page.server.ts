@@ -1,9 +1,11 @@
 import { error, fail, redirect } from '@sveltejs/kit';
-import { getPostById, deletePost } from '$lib/server/supabase/queries/posts';
-import { getUser, getSession, getUserOrCreateAnonymous } from '$lib/server/supabase/auth';
+import { getPostById, deletePost, incrementPostView } from '$lib/server/supabase/queries/posts';
+import { getAuthContext, getSession, getUser, getUserOrCreateAnonymous } from '$lib/server/supabase/auth';
 import { listComments } from '$lib/server/supabase/queries/comments';
 import { getLikeCount, isLiked } from '$lib/server/supabase/queries/likes';
 import { sanitizePostHtml } from '$lib/server/supabase/queries/posts';
+import { isBookmarked } from '$lib/server/supabase/queries/bookmarks';
+import { getWhiskyById } from '$lib/server/supabase/queries/whiskies';
 
 export async function load({ params, cookies }) {
   try {
@@ -22,17 +24,32 @@ export async function load({ params, cookies }) {
     // 익명 글 판단: post.isAnonymous 사용
     const isAnonymousPost = post.isAnonymous ?? false;
 
+    const viewCookieKey = `viewed_${postId}`;
+    let viewCount = post.views ?? 0;
+    if (!cookies.get(viewCookieKey)) {
+      const updatedCount = await incrementPostView(postId);
+      if (typeof updatedCount === 'number') {
+        viewCount = updatedCount;
+      }
+      cookies.set(viewCookieKey, '1', {
+        path: '/',
+        maxAge: 60 * 60 * 24
+      });
+    }
+
     // 댓글과 좋아요 정보 로드
-    const user = await getUser(cookies);
-    const sessionTokens = getSession(cookies);
-    const canSocial = !!user && !user.isAnonymous;
+    const { user, session: sessionTokens, canSocial } = await getAuthContext(cookies);
+    const enableComments = process.env.ENABLE_COMMENTS === 'true';
+    const socialUserId = canSocial && user ? user.id : null;
     
-    // 댓글 기능이 비활성화되어 있으면 빈 배열 반환 (에러 방지)
-    const ENABLE_COMMENTS = false;
-    const [comments, likeCount, userLiked] = await Promise.all([
-      ENABLE_COMMENTS ? listComments(postId, sessionTokens || undefined) : Promise.resolve([]),
+    const [comments, likeCount, userLiked, bookmarked, whisky] = await Promise.all([
+      enableComments
+        ? listComments(postId, sessionTokens || undefined).catch(() => [])
+        : Promise.resolve([]),
       getLikeCount(postId, sessionTokens || undefined).catch(() => 0), // 에러 발생 시 0 반환
-      canSocial ? isLiked(postId, user.id, sessionTokens || undefined).catch(() => false) : Promise.resolve(false)
+      socialUserId ? isLiked(postId, socialUserId, sessionTokens || undefined).catch(() => false) : Promise.resolve(false),
+      socialUserId ? isBookmarked(postId, socialUserId, sessionTokens || undefined).catch(() => false) : Promise.resolve(false),
+      post.whiskyId ? getWhiskyById(post.whiskyId).catch(() => null) : Promise.resolve(null)
     ]);
 
     // 정책:
@@ -49,11 +66,16 @@ export async function load({ params, cookies }) {
     // 조회수 증가는 MVP 단계에서 제외 (필요시 추후 추가)
 
     return {
-      post,
+      post: {
+        ...post,
+        views: viewCount
+      },
       postHtml: sanitizePostHtml(post.content),
+      whisky,
       comments,
       likeCount,
       isLiked: userLiked,
+      isBookmarked: bookmarked,
       canEditDelete,
       needsEditPassword
     };
@@ -101,6 +123,26 @@ export const actions = {
 
       const { createComment } = await import('$lib/server/supabase/queries/comments');
       const comment = await createComment(postId, content, user.id, sessionTokens);
+
+      try {
+        const post = await getPostById(postId);
+        if (post?.userId && post.userId !== user.id) {
+          const { createNotification } = await import('$lib/server/supabase/queries/notifications');
+          await createNotification(
+            {
+              userId: post.userId,
+              actorId: user.id,
+              actorName: user.nickname || user.email || null,
+              postId,
+              commentId: comment.id,
+              type: 'comment'
+            },
+            sessionTokens
+          );
+        }
+      } catch (notifyError) {
+        console.warn('댓글 알림 생성 실패:', notifyError);
+      }
 
       // redirect 대신 데이터 반환 (use:enhance로 즉시 반영)
       return { comment };
@@ -151,6 +193,48 @@ export const actions = {
       });
     }
   },
+  updateComment: async ({ request, params, cookies }) => {
+    try {
+      const user = await getUser(cookies);
+      if (!user || user.isAnonymous) {
+        return fail(401, { error: '댓글을 수정하려면 로그인이 필요합니다.' });
+      }
+
+      const sessionTokens = getSession(cookies);
+      if (!sessionTokens) {
+        return fail(401, { error: '로그인 세션이 없습니다. 다시 로그인해주세요.' });
+      }
+
+      const formData = await request.formData();
+      const commentId = formData.get('commentId')?.toString();
+      const content = formData.get('content')?.toString();
+
+      if (!commentId) {
+        return fail(400, {
+          error: '댓글 ID가 없습니다.'
+        });
+      }
+
+      if (!content || content.trim().length === 0) {
+        return fail(400, {
+          error: '댓글 내용을 입력해주세요.'
+        });
+      }
+
+      const { updateComment } = await import('$lib/server/supabase/queries/comments');
+      const comment = await updateComment(commentId, content, user.id, sessionTokens);
+
+      return { comment };
+    } catch (err) {
+      if (err && typeof err === 'object' && 'status' in err) {
+        throw err;
+      }
+      console.error('댓글 수정 오류:', err);
+      return fail(500, {
+        error: err instanceof Error ? err.message : '댓글 수정 중 오류가 발생했습니다.'
+      });
+    }
+  },
   toggleLike: async ({ request, params, cookies }) => {
     try {
       const postId = params.id;
@@ -174,7 +258,27 @@ export const actions = {
       }
 
       const { toggleLike, getLikeCount, isLiked } = await import('$lib/server/supabase/queries/likes');
-      await toggleLike(postId, user.id, sessionTokens);
+      const likedNow = await toggleLike(postId, user.id, sessionTokens);
+      if (likedNow) {
+        try {
+          const post = await getPostById(postId);
+          if (post?.userId && post.userId !== user.id) {
+            const { createNotification } = await import('$lib/server/supabase/queries/notifications');
+            await createNotification(
+              {
+                userId: post.userId,
+                actorId: user.id,
+                actorName: user.nickname || user.email || null,
+                postId,
+                type: 'like'
+              },
+              sessionTokens
+            );
+          }
+        } catch (notifyError) {
+          console.warn('좋아요 알림 생성 실패:', notifyError);
+        }
+      }
       const [likeCount, liked] = await Promise.all([
         getLikeCount(postId, sessionTokens),
         isLiked(postId, user.id, sessionTokens)
@@ -189,6 +293,41 @@ export const actions = {
       console.error('좋아요 토글 오류:', err);
       return fail(500, {
         error: '좋아요 처리 중 오류가 발생했습니다.'
+      });
+    }
+  },
+  toggleBookmark: async ({ request, params, cookies }) => {
+    try {
+      const postId = params.id;
+
+      if (!postId) {
+        return fail(400, {
+          error: '게시글 ID가 없습니다.'
+        });
+      }
+
+      const user = await getUser(cookies);
+      if (!user || user.isAnonymous) {
+        return fail(401, { error: '북마크를 사용하려면 로그인이 필요합니다.' });
+      }
+
+      const sessionTokens = getSession(cookies);
+      if (!sessionTokens) {
+        return fail(401, { error: '로그인 세션이 없습니다. 다시 로그인해주세요.' });
+      }
+
+      const { toggleBookmark, isBookmarked } = await import('$lib/server/supabase/queries/bookmarks');
+      await toggleBookmark(postId, user.id, sessionTokens);
+      const bookmarked = await isBookmarked(postId, user.id, sessionTokens);
+
+      return { isBookmarked: bookmarked };
+    } catch (err) {
+      if (err && typeof err === 'object' && 'status' in err) {
+        throw err;
+      }
+      console.error('북마크 토글 오류:', err);
+      return fail(500, {
+        error: '북마크 처리 중 오류가 발생했습니다.'
       });
     }
   },

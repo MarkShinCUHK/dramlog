@@ -10,6 +10,9 @@
       title?: string;
       content?: string;
       author?: string;
+      tags?: string;
+      whiskyId?: string;
+      thumbnailUrl?: string;
     };
   };
 
@@ -19,6 +22,9 @@
   let content = $state('');
   let contentText = $state('');
   let author = $state('');
+  let tags = $state('');
+  let whiskyId = $state('');
+  let thumbnailUrl = $state('');
   let error = $state('');
   let fieldErrors = $state<Record<string, string>>({});
   let editPassword = $state('');
@@ -39,6 +45,9 @@
         contentText = plainTextFromHtml(data.post.content);
       }
       if (data.post.author !== undefined) author = data.post.author;
+      if (Array.isArray(data.post.tags)) tags = data.post.tags.join(', ');
+      if (data.post.whiskyId) whiskyId = data.post.whiskyId;
+      if (data.post.thumbnailUrl) thumbnailUrl = data.post.thumbnailUrl;
     }
   });
 
@@ -47,6 +56,9 @@
     if (form?.values?.title !== undefined) title = form.values.title;
     if (form?.values?.content !== undefined) content = form.values.content;
     if (form?.values?.author !== undefined) author = form.values.author;
+    if (form?.values?.tags !== undefined) tags = form.values.tags;
+    if (form?.values?.whiskyId !== undefined) whiskyId = form.values.whiskyId;
+    if (form?.values?.thumbnailUrl !== undefined) thumbnailUrl = form.values.thumbnailUrl;
     if (form?.error !== undefined) error = form.error;
     if (form?.fieldErrors !== undefined) fieldErrors = form.fieldErrors || {};
     if (form?.values?.content !== undefined) {
@@ -61,6 +73,13 @@
 
   function plainTextFromHtml(html: string) {
     return (html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function extractImageUrls(html: string) {
+    const imgRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
+    return Array.from((html || '').matchAll(imgRegex))
+      .map((match) => match[1])
+      .filter((src): src is string => typeof src === 'string' && src.length > 0);
   }
 
   function validateTitle() {
@@ -108,10 +127,20 @@
   let allFieldErrors = $derived({ ...clientFieldErrors, ...fieldErrors });
 
   let isLoggedIn = $derived(!!$page.data?.user);
+  let imageCandidates = $derived(extractImageUrls(content));
   $effect(() => {
     if (isLoggedIn) {
       // 로그인 사용자는 닉네임을 작성자명으로 고정 (서버에서도 강제함)
       author = $page.data.user.nickname || $page.data.user.email || author;
+    }
+  });
+  $effect(() => {
+    if (imageCandidates.length === 0) {
+      if (thumbnailUrl) thumbnailUrl = '';
+      return;
+    }
+    if (!thumbnailUrl || !imageCandidates.includes(thumbnailUrl)) {
+      thumbnailUrl = imageCandidates[0] || '';
     }
   });
 
@@ -127,6 +156,13 @@
     if (author) {
       formData.append('author', author);
     }
+    if (tags) {
+      formData.append('tags', tags);
+    }
+    if (whiskyId) {
+      formData.append('whiskyId', whiskyId);
+    }
+    formData.append('thumbnailUrl', thumbnailUrl);
 
     if (data?.post?.isAnonymous && !isLoggedIn) {
       if (editPassword) {
@@ -159,7 +195,11 @@
       if (!res.ok) {
         // console.error('서버 응답 오류:', res.status, res.statusText);
         const errorData = await res.json().catch(() => ({}));
-        showToast(errorData.error ?? `서버 오류 (${res.status})`, 'error');
+        const message =
+          (typeof errorData?.data?.error === 'string' && errorData.data.error) ||
+          (typeof errorData?.error === 'string' && errorData.error) ||
+          `서버 오류 (${res.status})`;
+        showToast(message, 'error');
         return;
       }
 
@@ -179,9 +219,21 @@
         }
       } else if (result.type === 'failure') {
         // 실패 응답 처리
-        const errorMsg = result.data?.error ?? '게시글 수정에 실패했습니다.';
-        showToast(errorMsg, 'error');
-        // console.error('게시글 수정 실패:', result.data);
+        if (result.data?.fieldErrors) {
+          fieldErrors = result.data.fieldErrors || {};
+          error = result.data?.error ?? '';
+          return;
+        }
+        if (typeof result.data?.error === 'string' && result.data.error.length > 0) {
+          showToast(result.data.error, 'error');
+          return;
+        }
+        // 익명 글에서 400 실패면 비밀번호 오류로 간주해 명확한 메시지 표시
+        if (data?.post?.isAnonymous && result.status === 400) {
+          showToast('비밀번호가 일치하지 않습니다.', 'error');
+          return;
+        }
+        showToast('게시글 수정에 실패했습니다.', 'error');
       } else {
         // 알 수 없는 응답 타입
         // console.error('알 수 없는 응답 타입:', result);
@@ -259,6 +311,42 @@
       {/if}
     </div>
 
+    <!-- 태그 -->
+    <div class="mb-6">
+      <label for="tags" class="block text-sm font-medium text-gray-700 mb-2">
+        태그 (쉼표로 구분)
+      </label>
+      <input
+        type="text"
+        id="tags"
+        name="tags"
+        bind:value={tags}
+        placeholder="예: 버번, 셰리, 데일리"
+        class="w-full px-4 py-3 sm:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-whiskey-500 focus:border-whiskey-500 outline-none transition-colors"
+      />
+      <p class="mt-2 text-sm text-gray-500">태그는 쉼표로 구분되며 최대 10개까지 저장됩니다.</p>
+    </div>
+
+    <!-- 위스키 -->
+    <div class="mb-6">
+      <label for="whiskyId" class="block text-sm font-medium text-gray-700 mb-2">
+        위스키 선택
+      </label>
+      <select
+        id="whiskyId"
+        name="whiskyId"
+        bind:value={whiskyId}
+        class="w-full px-4 py-3 sm:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-whiskey-500 focus:border-whiskey-500 outline-none transition-colors"
+      >
+        <option value="">선택 안 함</option>
+        {#each data.whiskies || [] as whisky}
+          <option value={whisky.id}>
+            {whisky.brand ? `${whisky.brand} - ${whisky.name}` : whisky.name}
+          </option>
+        {/each}
+      </select>
+    </div>
+
     <!-- 내용 -->
     <div class="mb-6">
       <label for="content" class="block text-sm font-medium text-gray-700 mb-2">
@@ -277,13 +365,8 @@
           }}
           onImageAdd={(blobUrl, file) => {
             // Blob URL과 File 객체를 매핑하여 저장
-            const isFirstImage = imageFiles.size === 0;
             imageFiles.set(blobUrl, file);
-            
-            // 첫 번째 이미지 업로드 시 토스트 메시지 표시
-            if (isFirstImage) {
-              showToast('첫 번째 이미지가 게시글 목록의 썸네일로 사용됩니다.', 'success');
-            }
+            showToast('이미지가 추가되었습니다. 대표 이미지를 선택할 수 있습니다.', 'success');
           }}
         />
       </div>
@@ -291,6 +374,40 @@
         <p class="mt-2 text-sm text-red-600">{allFieldErrors.content}</p>
       {/if}
     </div>
+
+    {#if imageCandidates.length > 0}
+      <fieldset class="mb-6">
+        <legend class="block text-sm font-medium text-gray-700 mb-2">
+          대표 이미지 선택
+        </legend>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {#each imageCandidates as imageUrl}
+            <button
+              type="button"
+              class="group relative overflow-hidden rounded-xl border {thumbnailUrl === imageUrl ? 'border-whiskey-500 ring-2 ring-whiskey-300' : 'border-gray-200'}"
+              aria-pressed={thumbnailUrl === imageUrl}
+              onclick={() => {
+                thumbnailUrl = imageUrl;
+              }}
+            >
+              <img
+                src={imageUrl}
+                alt="대표 이미지 후보"
+                class="h-28 w-full object-cover transition group-hover:scale-105"
+                loading="lazy"
+              />
+              {#if thumbnailUrl === imageUrl}
+                <div class="absolute inset-0 bg-black/30"></div>
+                <div class="absolute bottom-2 right-2 rounded-full bg-whiskey-600 text-white text-xs px-2 py-1">
+                  선택됨
+                </div>
+              {/if}
+            </button>
+          {/each}
+        </div>
+        <p class="mt-2 text-sm text-gray-500">게시글 목록 카드 썸네일로 사용됩니다.</p>
+      </fieldset>
+    {/if}
 
     {#if data?.post?.isAnonymous && !isLoggedIn}
       <!-- 익명 글 관리 비밀번호 -->

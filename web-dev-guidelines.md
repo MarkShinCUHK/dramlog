@@ -23,7 +23,7 @@
 - Tailwind CSS만 사용한 스타일링
 - Supabase (PostgreSQL 기반 BaaS) 사용
 
-### 현재 단계 (2026-01-22 기준)
+### 현재 단계 (2026-01-26 기준)
 - ✅ 기본 라우트 구조 설계 및 구현
 - ✅ Tailwind 기반 UI 스켈레톤 생성
 - ✅ 위스키 커뮤니티 느낌의 색감/톤 적용
@@ -42,6 +42,9 @@
 - ✅ 프로젝트 이름 DramLog로 통일
 - ✅ 날짜 2026-01-22 기준으로 업데이트
 - ✅ Svelte 5 도입 완료 (신규 컴포넌트는 Runes 모드, 기존 컴포넌트는 점진적 마이그레이션)
+- ✅ 검색 필터 추가 (작성자/날짜/정렬)
+- ✅ 대표 이미지(썸네일) 선택 기능
+- ✅ 알림 기능 (좋아요/댓글) + `/notifications` 라우트
 
 ---
 
@@ -84,6 +87,9 @@ src/routes/
 ├── search/
 │   ├── +page.svelte        # 검색 결과 (/search)
 │   └── +page.server.ts     # 검색 로직
+├── notifications/
+│   ├── +page.svelte        # 알림 목록 (/notifications)
+│   └── +page.server.ts     # 알림 로직
 ├── login/                  # 로그인
 ├── signup/                 # 회원가입
 ├── logout/                 # 로그아웃
@@ -252,7 +258,8 @@ src/lib/
             ├── comments.ts # 댓글 쿼리 함수 ✅
             ├── likes.ts   # 좋아요 쿼리 함수 ✅
             ├── storage.ts # 이미지 업로드 함수 ✅
-            └── images.ts  # Blob URL 변환 함수 ✅
+            ├── images.ts  # Blob URL 변환 함수 ✅
+            └── notifications.ts # 알림 쿼리 함수 ✅
 ```
 
 ### 컴포넌트 예시
@@ -269,7 +276,6 @@ src/lib/
       {post.title}
     </a>
   </h2>
-  <p class="text-gray-600 mb-4">{post.excerpt}</p>
   <div class="flex items-center justify-between text-sm text-gray-500">
     <span>{post.author}</span>
     <span>{post.createdAt}</span>
@@ -463,7 +469,7 @@ Tailwind 기본 간격 사용:
 - 코드 스플리팅 자동 적용
 - 이미지 최적화 (향후 추가 예정)
   - ✅ 기본 업로드 기능 구현 완료 (Supabase Storage)
-  - 🔄 이미지 압축 기능 (향후 추가)
+  - ✅ 이미지 압축 기능 (클라이언트 리사이즈/압축)
   - Lazy loading
   - WebP 형식 지원
   - 썸네일 생성
@@ -599,6 +605,7 @@ Tailwind 기본 간격 사용:
    - ✅ **구현 완료**:
      - 검색바 컴포넌트: Header에 통합 (데스크톱/모바일 반응형)
      - 검색 쿼리 함수: `searchPosts(query, { limit, offset })`, `getSearchPostCount(query)` - Supabase `ilike` 사용
+     - ✅ 필터: 작성자/날짜/정렬 지원
      - 검색 결과 페이지: 쿼리 파라미터 `q` 읽기, 결과 목록 표시, 페이지네이션 지원
      - 파일: `src/lib/components/SearchBar.svelte`, `src/routes/search/+page.svelte`, `src/routes/search/+page.server.ts`
 
@@ -655,8 +662,18 @@ Tailwind 기본 간격 사용:
      - 좋아요 쿼리 함수: `getLikeCount()`, `isLiked()`, `toggleLike()` (`src/lib/server/supabase/queries/likes.ts`)
      - LikeButton 컴포넌트: 하트 아이콘, 좋아요 개수 표시, 클릭 시 토글
      - 게시글 상세 페이지(`/posts/[id]`)에 LikeButton 컴포넌트 통합
-     - 로그인 사용자만 좋아요 가능
-     - 서버 액션: `toggleLike` (`/posts/[id]/+page.server.ts`)
+   - 로그인 사용자만 좋아요 가능
+   - 서버 액션: `toggleLike` (`/posts/[id]/+page.server.ts`)
+
+5. ✅ **조회수 집계**
+  - `posts.view_count` 컬럼 추가 (`supabase-schema.sql`)
+  - `increment_post_view()` 함수로 조회수 증가 (RLS 우회)
+  - 쿠키 기반 중복 방지 (24시간)
+
+6. ✅ **알림 기능**
+  - `/notifications` 라우트 추가
+  - 좋아요/댓글 알림 생성 및 읽음 처리
+  - 헤더에 읽지 않은 알림 배지 표시
 
 ### MVP 6단계: UI/UX 개선 (완료 ✅)
 **목표**: 사용자 경험 향상 및 반응형 최적화
@@ -721,7 +738,6 @@ Tailwind 기본 간격 사용:
          ```
    - **브라우저 자동완성 방지**:
      - ✅ `autocomplete` 속성 추가:
-       - `excerpt` 필드: `autocomplete="off"`
        - `editPassword` 필드: `autocomplete="new-password"`
        - `editPasswordConfirm` 필드: `autocomplete="new-password"`
        - 수정 페이지 비밀번호: `autocomplete="current-password"`
@@ -740,7 +756,7 @@ Tailwind 기본 간격 사용:
 3. **성능 최적화**
    - **이미지 최적화** (향후 추가 예정):
      - ✅ 기본 업로드 기능 구현 완료 (Supabase Storage)
-     - 🔄 이미지 압축 기능 (향후 추가)
+     - ✅ 이미지 압축 기능 (클라이언트 리사이즈/압축)
      - Lazy loading
      - WebP 형식 지원
      - 썸네일 생성
@@ -825,12 +841,11 @@ Tailwind 기본 간격 사용:
 
 ### 향후 추가 예정
 - ✅ 이미지 업로드 (Supabase Storage) - 기본 기능 구현 완료
-- 🔄 이미지 압축 기능 (향후 추가)
-- 사용자 프로필 페이지
-- 북마크 기능
-- 태그 시스템
-- 위스키 정보 데이터베이스 (위스키 종류, 브랜드, 리뷰 등)
-- 알림 시스템
+- ✅ 이미지 압축 기능 (클라이언트 리사이즈/압축)
+- ✅ 사용자 프로필 페이지 (프로필 편집)
+- ✅ 북마크 기능 (북마크 테이블 + 목록/토글)
+- ✅ 태그 시스템 (태그 입력/검색/필터)
+- ✅ 위스키 정보 데이터베이스 (위스키 종류, 브랜드, 리뷰 등)
 - 소셜 공유 기능
 
 ---
@@ -978,4 +993,4 @@ CREATE TABLE posts (
 
 ---
 
-**마지막 업데이트**: 2026-01-23 (코드 리뷰 규칙 추가)
+**마지막 업데이트**: 2026-01-26 (검색 필터, 알림, 대표 이미지 선택)

@@ -5,10 +5,12 @@
   
   let { 
     comment,
-    ondeleted
+    ondeleted,
+    onupdated
   }: {
     comment: Comment;
     ondeleted?: (id: string) => void;
+    onupdated?: (comment: Comment) => void;
   } = $props();
   
   let isMyComment = $derived($page.data?.user?.id === comment.userId);
@@ -18,6 +20,15 @@
   );
 
   let pendingDelete = $state(false);
+  let pendingUpdate = $state(false);
+  let isEditing = $state(false);
+  let draftContent = $state('');
+
+  $effect(() => {
+    if (!isEditing) {
+      draftContent = comment.content;
+    }
+  });
 
   function enhanceDeleteComment() {
     pendingDelete = true;
@@ -28,6 +39,24 @@
         ondeleted?.(id);
         return;
       }
+    };
+  }
+
+  function enhanceUpdateComment() {
+    pendingUpdate = true;
+    const prev = comment.content;
+
+    return async ({ result }: { result: any }) => {
+      pendingUpdate = false;
+      if (result.type === 'success') {
+        const updated = result.data?.comment;
+        if (updated) {
+          onupdated?.(updated);
+        }
+        isEditing = false;
+        return;
+      }
+      draftContent = prev;
     };
   }
 </script>
@@ -44,17 +73,60 @@
       {/if}
     </div>
     {#if isMyComment}
-      <form method="POST" action="?/deleteComment" use:enhance={enhanceDeleteComment}>
-        <input type="hidden" name="commentId" value={comment.id} />
+      <div class="flex items-center gap-3">
         <button
-          type="submit"
-          class="text-xs text-red-500 hover:text-red-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-          disabled={pendingDelete}
+          type="button"
+          class="text-xs text-gray-500 hover:text-gray-700 transition-colors"
+          onclick={() => (isEditing = true)}
+          disabled={pendingUpdate}
         >
-          삭제
+          수정
         </button>
-      </form>
+        <form method="POST" action="?/deleteComment" use:enhance={enhanceDeleteComment}>
+          <input type="hidden" name="commentId" value={comment.id} />
+          <button
+            type="submit"
+            class="text-xs text-red-500 hover:text-red-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={pendingDelete}
+          >
+            삭제
+          </button>
+        </form>
+      </div>
     {/if}
   </div>
-  <p class="text-gray-700 whitespace-pre-line leading-relaxed">{comment.content}</p>
+  {#if isEditing}
+    <form method="POST" action="?/updateComment" use:enhance={enhanceUpdateComment} class="space-y-3">
+      <input type="hidden" name="commentId" value={comment.id} />
+      <textarea
+        name="content"
+        rows="3"
+        bind:value={draftContent}
+        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-whiskey-500 focus:border-whiskey-500 outline-none transition-colors"
+        required
+        disabled={pendingUpdate}
+      ></textarea>
+      <div class="flex gap-2">
+        <button
+          type="submit"
+          class="text-xs text-whiskey-700 hover:text-whiskey-900 transition-colors disabled:opacity-60"
+          disabled={pendingUpdate}
+        >
+          저장
+        </button>
+        <button
+          type="button"
+          class="text-xs text-gray-500 hover:text-gray-700 transition-colors"
+          onclick={() => {
+            isEditing = false;
+            draftContent = comment.content;
+          }}
+        >
+          취소
+        </button>
+      </div>
+    </form>
+  {:else}
+    <p class="text-gray-700 whitespace-pre-line leading-relaxed">{comment.content}</p>
+  {/if}
 </div>

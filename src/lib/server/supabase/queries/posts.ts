@@ -1,4 +1,4 @@
-import { createSupabaseClient, createSupabaseClientWithSession } from '../client.js';
+import { createSupabaseClient, createSupabaseClientForSession } from '../client.js';
 import type { Post, PostRow } from '../types.js';
 import type { SessionTokens } from '../auth.js';
 import crypto from 'node:crypto';
@@ -10,6 +10,16 @@ const DEFAULT_AUTHOR_NAME = '익명의 위스키 러버';
 function normalizeAuthorName(author?: string) {
   const trimmed = author?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : DEFAULT_AUTHOR_NAME;
+}
+
+function normalizeTags(tags?: string[]) {
+  if (!tags || tags.length === 0) return [];
+  const unique = new Set(
+    tags
+      .map((tag) => tag.trim())
+      .filter((tag) => tag.length > 0)
+  );
+  return Array.from(unique).slice(0, 10);
 }
 
 /**
@@ -135,7 +145,7 @@ export function sanitizePostHtml(html: string): string {
 /**
  * Supabase row를 Post 타입으로 변환
  */
-function mapRowToPost(row: PostRow): Post {
+export function mapRowToPost(row: PostRow): Post {
   const createdAt = new Date(row.created_at);
   const dateStr = createdAt.toISOString().split('T')[0]; // YYYY-MM-DD
 
@@ -147,9 +157,12 @@ function mapRowToPost(row: PostRow): Post {
     createdAt: dateStr,
     userId: row.user_id ?? null,
     isAnonymous: row.is_anonymous ?? false,
+    whiskyId: row.whisky_id ?? null,
+    thumbnailUrl: row.thumbnail_url ?? null,
+    tags: row.tags ?? [],
     // 선택적 필드들 안전하게 처리
     likes: row.like_count ?? undefined,
-    views: undefined, // 현재 스키마에 없음
+    views: row.view_count ?? 0,
   };
 }
 
@@ -191,6 +204,72 @@ export async function listPosts(limit?: number, offset?: number): Promise<Post[]
 }
 
 /**
+ * 태그로 게시글 목록 조회
+ */
+export async function listPostsByTag(
+  tag: string,
+  limit?: number,
+  offset?: number,
+  filters?: PostSearchFilters
+): Promise<Post[]> {
+  try {
+    const trimmed = tag.trim();
+    if (!trimmed) return [];
+
+    const supabase = createSupabaseClient();
+    let query = supabase
+      .from('posts')
+      .select('*')
+      .contains('tags', [trimmed]);
+
+    query = applyPostFilters(query, filters);
+    query = applyPostSort(query, filters?.sort);
+
+    if (typeof offset === 'number' && offset >= 0 && limit && limit > 0) {
+      query = query.range(offset, offset + limit - 1);
+    } else if (limit && limit > 0) {
+      query = query.limit(limit);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.error('태그 게시글 조회 오류:', error);
+      throw error;
+    }
+    if (!data || data.length === 0) return [];
+    return data.map(mapRowToPost);
+  } catch (error) {
+    console.error('태그 게시글 조회 오류:', error);
+    return [];
+  }
+}
+
+export async function getPostCountByTag(tag: string, filters?: PostSearchFilters): Promise<number> {
+  try {
+    const trimmed = tag.trim();
+    if (!trimmed) return 0;
+
+    const supabase = createSupabaseClient();
+    let query = supabase
+      .from('posts')
+      .select('*', { count: 'exact', head: true })
+      .contains('tags', [trimmed]);
+
+    query = applyPostFilters(query, filters);
+    const { count, error } = await query;
+
+    if (error) {
+      console.error('태그 게시글 개수 조회 오류:', error);
+      return 0;
+    }
+    return count ?? 0;
+  } catch (error) {
+    console.error('태그 게시글 개수 조회 오류:', error);
+    return 0;
+  }
+}
+
+/**
  * 게시글 전체 개수 조회
  */
 export async function getPostCount(): Promise<number> {
@@ -211,12 +290,46 @@ export async function getPostCount(): Promise<number> {
   }
 }
 
+export type PostSearchSort = 'newest' | 'oldest' | 'views';
+export type PostSearchFilters = {
+  author?: string;
+  from?: string;
+  to?: string;
+  sort?: PostSearchSort;
+};
+
+function applyPostFilters(query: any, filters?: PostSearchFilters) {
+  if (!filters) return query;
+  const author = filters.author?.trim();
+  if (author) {
+    query = query.ilike('author_name', `%${author}%`);
+  }
+  if (filters.from) {
+    query = query.gte('created_at', filters.from);
+  }
+  if (filters.to) {
+    query = query.lte('created_at', filters.to);
+  }
+  return query;
+}
+
+function applyPostSort(query: any, sort?: PostSearchSort) {
+  const sortKey = sort || 'newest';
+  if (sortKey === 'oldest') {
+    return query.order('created_at', { ascending: true });
+  }
+  if (sortKey === 'views') {
+    return query.order('view_count', { ascending: false }).order('created_at', { ascending: false });
+  }
+  return query.order('created_at', { ascending: false });
+}
+
 /**
  * 게시글 검색 (제목/내용)
  */
 export async function searchPosts(
   queryText: string,
-  input?: { limit?: number; offset?: number }
+  input?: { limit?: number; offset?: number; filters?: PostSearchFilters }
 ): Promise<Post[]> {
   try {
     const q = queryText.trim();
@@ -226,8 +339,10 @@ export async function searchPosts(
     let query = supabase
       .from('posts')
       .select('*')
-      .or(`title.ilike.%${q}%,content.ilike.%${q}%`)
-      .order('created_at', { ascending: false });
+      .or(`title.ilike.%${q}%,content.ilike.%${q}%`);
+
+    query = applyPostFilters(query, input?.filters);
+    query = applyPostSort(query, input?.filters?.sort);
 
     if (input?.offset && input.offset > 0) {
       query = query.range(input.offset, input.offset + (input.limit ?? 12) - 1);
@@ -248,16 +363,19 @@ export async function searchPosts(
   }
 }
 
-export async function getSearchPostCount(queryText: string): Promise<number> {
+export async function getSearchPostCount(queryText: string, filters?: PostSearchFilters): Promise<number> {
   try {
     const q = queryText.trim();
     if (!q) return 0;
 
     const supabase = createSupabaseClient();
-    const { count, error } = await supabase
+    let query = supabase
       .from('posts')
       .select('*', { count: 'exact', head: true })
       .or(`title.ilike.%${q}%,content.ilike.%${q}%`);
+
+    query = applyPostFilters(query, filters);
+    const { count, error } = await query;
 
     if (error) {
       console.error('검색 개수 조회 오류:', error);
@@ -304,6 +422,24 @@ export async function getPostById(id: string): Promise<Post | null> {
 }
 
 /**
+ * 게시글 조회수 증가 (RLS 우회 함수 사용)
+ */
+export async function incrementPostView(postId: string): Promise<number | null> {
+  try {
+    const supabase = createSupabaseClient();
+    const { data, error } = await supabase.rpc('increment_post_view', { p_post_id: postId });
+    if (error) {
+      console.error('조회수 증가 오류:', error);
+      return null;
+    }
+    return typeof data === 'number' ? data : null;
+  } catch (error) {
+    console.error('조회수 증가 오류:', error);
+    return null;
+  }
+}
+
+/**
  * 게시글 생성
  * @param input 게시글 입력 데이터
  * @param accessToken 세션 토큰 (RLS 정책 적용을 위해 필요)
@@ -315,14 +451,17 @@ export async function createPost(
     author_name?: string;
     edit_password?: string;
     user_id?: string | null;
+    whisky_id?: string | null;
+    thumbnail_url?: string | null;
+    tags?: string[];
   },
   accessToken?: string
 ): Promise<Post> {
   try {
     // 세션 토큰이 있으면 사용, 없으면 기본 클라이언트 사용
-    const supabase = accessToken
-      ? createSupabaseClientWithSession({ accessToken, refreshToken: '' })
-      : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(
+      accessToken ? { accessToken, refreshToken: '' } : null
+    );
 
     // edit_password가 있으면 익명 글, 없으면 로그인 글
     const isAnonymous = !!input.edit_password;
@@ -347,7 +486,10 @@ export async function createPost(
         author_name: normalizeAuthorName(input.author_name),
         edit_password_hash: editPasswordHash,
         user_id: input.user_id ?? null,
-        is_anonymous: isAnonymous
+        is_anonymous: isAnonymous,
+        whisky_id: input.whisky_id ?? null,
+        thumbnail_url: input.thumbnail_url ?? null,
+        tags: normalizeTags(input.tags)
       })
       .select()
       .single();
@@ -435,12 +577,15 @@ export async function updatePost(
     title?: string;
     content?: string;
     author_name?: string;
+    whisky_id?: string | null;
+    thumbnail_url?: string | null;
+    tags?: string[];
   },
   auth: { editPassword?: string; userId?: string | null },
   sessionTokens?: SessionTokens // Optional session tokens for RLS
 ): Promise<Post> {
   try {
-    const supabase = sessionTokens ? createSupabaseClientWithSession(sessionTokens) : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
 
     // 소유/비밀번호 검증을 위해 authRow 조회
     const { data: authRow, error: authError } = await supabase
@@ -497,6 +642,9 @@ export async function updatePost(
     if (input.title !== undefined) updateData.title = input.title;
     if (input.content !== undefined) updateData.content = sanitizePostHtml(input.content);
     if (input.author_name !== undefined) updateData.author_name = normalizeAuthorName(input.author_name);
+    if (input.whisky_id !== undefined) updateData.whisky_id = input.whisky_id;
+    if (input.thumbnail_url !== undefined) updateData.thumbnail_url = input.thumbnail_url;
+    if (input.tags !== undefined) updateData.tags = normalizeTags(input.tags);
 
     const { data, error } = await supabase
       .from('posts')
@@ -539,7 +687,7 @@ export async function deletePost(
   sessionTokens?: SessionTokens // Optional session tokens for RLS
 ): Promise<void> {
   try {
-    const supabase = sessionTokens ? createSupabaseClientWithSession(sessionTokens) : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
 
     // 비밀번호 검증을 위해 해시 조회
     // (delete는 반환 row가 없을 수 있으므로 먼저 select)
@@ -629,9 +777,7 @@ export async function convertAnonymousPostsToUserPosts(
   sessionTokens?: SessionTokens
 ): Promise<number> {
   try {
-    const supabase = sessionTokens
-      ? createSupabaseClientWithSession(sessionTokens)
-      : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
 
     // 먼저 업데이트할 글들을 조회 (디버깅용)
     const { data: postsToUpdate, error: selectError } = await supabase
