@@ -859,12 +859,22 @@ Tailwind 기본 간격 사용:
    - 프로젝트 URL과 Anon Key 확인
 
 2. **환경 변수 설정**
+   - `.env.example`을 복사해 `.env` 구성
    - `.env` 파일에 다음 변수 추가:
    ```env
    PUBLIC_SUPABASE_URL=https://your-project.supabase.co
    PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+   ANON_POST_SECRET=CHANGE_ME
    ```
    - **주의**: `PUBLIC_` 접두사가 붙은 변수는 클라이언트에 노출되지만, ANON_KEY는 RLS로 보호됩니다.
+   - **주의**: `ANON_POST_SECRET`은 DB 시크릿과 반드시 동일해야 합니다.
+
+   ```sql
+   update app_private.app_secrets
+   set value = '<ANON_POST_SECRET과 동일한 값>',
+       updated_at = now()
+   where key = 'anon_post_secret';
+   ```
 
 3. **데이터베이스 스키마 생성**
    - Supabase 대시보드 → SQL Editor 열기

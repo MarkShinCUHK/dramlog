@@ -66,6 +66,7 @@ npm run dev -- --host
 1. [Supabase 대시보드](https://app.supabase.com)에서 프로젝트 생성
 2. 프로젝트 URL과 Anon Key 확인 (Settings → API)
 3. SQL Editor에서 `supabase-schema.sql` 파일의 내용을 실행하여 테이블 생성 (`posts`, `comments`, `likes`)
+   - `pgcrypto` 확장 생성 포함 (hmac/uuid 사용)
 4. ✅ RLS (Row Level Security) 활성화 완료
    - 읽기: 모든 사용자(익명 포함) 읽기 가능
    - 쓰기: 모든 사용자(익명 포함) 작성 가능

@@ -471,7 +471,8 @@ src/
 - **서버/클라이언트 에러 병합**: `allFieldErrors = { ...clientFieldErrors, ...fieldErrors }` (서버 에러가 우선)
 
 ## Supabase 관련 규칙
-- **환경 변수**: `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY` 사용
+- **환경 변수**: `.env.example`을 복사해 `.env` 구성 (`PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`, `ANON_POST_SECRET`)
+- **익명 서명 시크릿**: `ANON_POST_SECRET`은 DB의 `app_private.app_secrets.anon_post_secret`과 동일해야 함
 - **RLS (Row Level Security)**: ✅ RLS 정책 활성화 완료 (읽기/쓰기/수정/삭제 정책 설정)
 - **Anonymous Auth**: ✅ 익명 인증 구현 완료 (익명 사용자도 세션을 가지도록 함)
 - **서버 전용**: `src/lib/server/supabase/client.ts`에서만 클라이언트 생성
