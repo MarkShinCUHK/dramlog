@@ -37,6 +37,18 @@ export const actions = {
     }
 
     const supabase = createSupabaseClientForSession(sessionTokens);
+    // 서버 환경에서 auth.updateUser가 세션을 못 찾는 경우가 있어 명시적으로 세션을 설정
+    const { error: sessionError } = await supabase.auth.setSession({
+      access_token: sessionTokens.accessToken,
+      refresh_token: sessionTokens.refreshToken
+    });
+    if (sessionError) {
+      return fail(401, {
+        error: sessionError.message || '로그인 세션이 유효하지 않습니다.',
+        values: { nickname, bio, avatarUrl }
+      });
+    }
+
     const { error: authError } = await supabase.auth.updateUser({
       data: {
         nickname

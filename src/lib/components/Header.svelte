@@ -1,12 +1,41 @@
-<script>
+<script lang="ts">
   import { page } from '$app/stores';
   import SearchBar from '$lib/components/SearchBar.svelte';
+  import { onMount } from 'svelte';
 
   let mobileMenuOpen = $state(false);
+  let userMenuOpen = $state(false);
+  let userMenuRoot: HTMLDivElement | null = $state(null);
+
+  const avatarUrl = $derived($page.data?.profile?.avatarUrl || '');
+  const avatarFallback = $derived(($page.data?.user?.nickname || $page.data?.user?.email || 'U').slice(0, 1).toUpperCase());
 
   function toggleMobileMenu() {
     mobileMenuOpen = !mobileMenuOpen;
   }
+
+  function toggleUserMenu() {
+    userMenuOpen = !userMenuOpen;
+  }
+
+  function closeUserMenu() {
+    userMenuOpen = false;
+  }
+
+  onMount(() => {
+    const handleClick = (event: MouseEvent) => {
+      if (!userMenuRoot) {
+        userMenuOpen = false;
+        return;
+      }
+      const target = event.target as Node | null;
+      if (!target || !userMenuRoot.contains(target)) {
+        userMenuOpen = false;
+      }
+    };
+    window.addEventListener('click', handleClick);
+    return () => window.removeEventListener('click', handleClick);
+  });
 </script>
 
 <nav class="sticky top-0 z-50 border-b border-black/5 bg-white/70 text-gray-900 backdrop-blur-md">
@@ -28,20 +57,48 @@
           작성하기
         </a>
         {#if $page.data?.user}
-          <a href="/my-posts" class="text-gray-700 hover:text-gray-900 transition-colors font-medium">내 글</a>
-          <a href="/bookmarks" class="text-gray-700 hover:text-gray-900 transition-colors font-medium">북마크</a>
-          <a href="/notifications" class="relative text-gray-700 hover:text-gray-900 transition-colors font-medium">
-            알림
-            {#if $page.data?.notifications?.unreadCount > 0}
-              <span class="ml-1 inline-flex items-center justify-center rounded-full bg-whiskey-600 text-white text-[10px] font-semibold px-2 py-0.5">
-                {$page.data.notifications.unreadCount}
-              </span>
+          <div class="relative" bind:this={userMenuRoot}>
+            <button
+              type="button"
+              class="h-10 w-10 rounded-full overflow-hidden ring-1 ring-black/10 bg-whiskey-100 hover:ring-whiskey-300 transition-colors"
+              aria-label="사용자 메뉴"
+              aria-expanded={userMenuOpen}
+              onclick={toggleUserMenu}
+            >
+              {#if avatarUrl}
+                <img src={avatarUrl} alt="프로필" class="h-full w-full object-cover" />
+              {:else}
+                <span class="flex h-full w-full items-center justify-center text-sm font-semibold text-whiskey-800">
+                  {avatarFallback}
+                </span>
+              {/if}
+            </button>
+            {#if userMenuOpen}
+              <div class="absolute right-0 mt-2 w-56 rounded-xl border border-black/5 bg-white/95 backdrop-blur p-2 shadow-lg ring-1 ring-black/5">
+                <a href="/notifications" class="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-800" onclick={closeUserMenu}>
+                  <span>알림</span>
+                  {#if $page.data?.notifications?.unreadCount > 0}
+                    <span class="inline-flex items-center justify-center rounded-full bg-whiskey-600 text-white text-[10px] font-semibold px-2 py-0.5">
+                      {$page.data.notifications.unreadCount}
+                    </span>
+                  {/if}
+                </a>
+                <a href="/my-posts" class="block px-3 py-2 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-800" onclick={closeUserMenu}>
+                  내 글
+                </a>
+                <a href="/profile" class="block px-3 py-2 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-800" onclick={closeUserMenu}>
+                  마이페이지
+                </a>
+                <a href="/bookmarks" class="block px-3 py-2 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-800" onclick={closeUserMenu}>
+                  북마크
+                </a>
+                <div class="my-1 h-px bg-black/5"></div>
+                <a href="/logout" class="block px-3 py-2 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-800" onclick={closeUserMenu}>
+                  로그아웃
+                </a>
+              </div>
             {/if}
-          </a>
-          <a href="/profile" class="text-gray-700 hover:text-gray-900 transition-colors font-medium">프로필</a>
-          <a href="/logout" class="px-4 py-2 rounded-xl bg-gray-900/5 hover:bg-gray-900/10 ring-1 ring-black/10 transition-colors font-medium">
-            로그아웃
-          </a>
+          </div>
         {:else}
           <a href="/login" class="text-gray-700 hover:text-gray-900 transition-colors font-medium">로그인</a>
           <a href="/signup" class="px-4 py-2 rounded-xl bg-gray-900/5 hover:bg-gray-900/10 ring-1 ring-black/10 transition-colors font-medium">
