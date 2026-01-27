@@ -1,4 +1,4 @@
-import { createSupabaseClient, createSupabaseClientWithSession } from '../client.js';
+import { createSupabaseClientForSession } from '../client.js';
 import type { Profile, ProfileRow } from '../types.js';
 import type { SessionTokens } from '../auth.js';
 
@@ -14,9 +14,7 @@ function mapRowToProfile(row: ProfileRow): Profile {
 
 export async function getProfile(userId: string, sessionTokens?: SessionTokens): Promise<Profile | null> {
   try {
-    const supabase = sessionTokens
-      ? createSupabaseClientWithSession(sessionTokens)
-      : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
 
     const { data, error } = await supabase
       .from('profiles')
@@ -43,7 +41,7 @@ export async function upsertProfile(
   sessionTokens: SessionTokens
 ): Promise<Profile | null> {
   try {
-    const supabase = createSupabaseClientWithSession(sessionTokens);
+    const supabase = createSupabaseClientForSession(sessionTokens);
     const { data, error } = await supabase
       .from('profiles')
       .upsert(

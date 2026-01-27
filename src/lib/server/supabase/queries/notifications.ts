@@ -1,4 +1,4 @@
-import { createSupabaseClient, createSupabaseClientWithSession } from '../client.js';
+import { createSupabaseClientForSession } from '../client.js';
 import type { Notification, NotificationRow } from '../types.js';
 import type { SessionTokens } from '../auth.js';
 
@@ -39,9 +39,7 @@ export async function listNotifications(
   input?: { limit?: number; offset?: number }
 ): Promise<Notification[]> {
   try {
-    const supabase = sessionTokens
-      ? createSupabaseClientWithSession(sessionTokens)
-      : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
 
     let query = supabase
       .from('notifications')
@@ -77,9 +75,7 @@ export async function getUnreadNotificationCount(
   sessionTokens?: SessionTokens
 ): Promise<number> {
   try {
-    const supabase = sessionTokens
-      ? createSupabaseClientWithSession(sessionTokens)
-      : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
 
     const { count, error } = await supabase
       .from('notifications')
@@ -108,9 +104,7 @@ export async function getNotificationCount(
   sessionTokens?: SessionTokens
 ): Promise<number> {
   try {
-    const supabase = sessionTokens
-      ? createSupabaseClientWithSession(sessionTokens)
-      : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
 
     const { count, error } = await supabase
       .from('notifications')
@@ -138,9 +132,7 @@ export async function markNotificationRead(
   userId: string,
   sessionTokens?: SessionTokens
 ): Promise<void> {
-  const supabase = sessionTokens
-    ? createSupabaseClientWithSession(sessionTokens)
-    : createSupabaseClient();
+  const supabase = createSupabaseClientForSession(sessionTokens);
 
   const { error } = await supabase
     .from('notifications')
@@ -158,9 +150,7 @@ export async function markAllNotificationsRead(
   userId: string,
   sessionTokens?: SessionTokens
 ): Promise<number> {
-  const supabase = sessionTokens
-    ? createSupabaseClientWithSession(sessionTokens)
-    : createSupabaseClient();
+  const supabase = createSupabaseClientForSession(sessionTokens);
 
   const { data, error } = await supabase
     .from('notifications')
@@ -189,9 +179,7 @@ export async function createNotification(
   sessionTokens?: SessionTokens
 ): Promise<void> {
   try {
-    const supabase = sessionTokens
-      ? createSupabaseClientWithSession(sessionTokens)
-      : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
 
     const { error } = await supabase
       .from('notifications')

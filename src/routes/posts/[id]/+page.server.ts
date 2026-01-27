@@ -1,6 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { getPostById, deletePost, incrementPostView } from '$lib/server/supabase/queries/posts';
-import { getUser, getSession, getUserOrCreateAnonymous } from '$lib/server/supabase/auth';
+import { getAuthContext, getSession, getUser, getUserOrCreateAnonymous } from '$lib/server/supabase/auth';
 import { listComments } from '$lib/server/supabase/queries/comments';
 import { getLikeCount, isLiked } from '$lib/server/supabase/queries/likes';
 import { sanitizePostHtml } from '$lib/server/supabase/queries/posts';
@@ -38,17 +38,17 @@ export async function load({ params, cookies }) {
     }
 
     // 댓글과 좋아요 정보 로드
-    const user = await getUser(cookies);
-    const sessionTokens = getSession(cookies);
-    const canSocial = !!user && !user.isAnonymous;
+    const { user, session: sessionTokens, canSocial } = await getAuthContext(cookies);
+    const enableComments = process.env.ENABLE_COMMENTS === 'true';
+    const socialUserId = canSocial && user ? user.id : null;
     
-    // 댓글 기능이 비활성화되어 있으면 빈 배열 반환 (에러 방지)
-    const ENABLE_COMMENTS = false;
     const [comments, likeCount, userLiked, bookmarked, whisky] = await Promise.all([
-      ENABLE_COMMENTS ? listComments(postId, sessionTokens || undefined) : Promise.resolve([]),
+      enableComments
+        ? listComments(postId, sessionTokens || undefined).catch(() => [])
+        : Promise.resolve([]),
       getLikeCount(postId, sessionTokens || undefined).catch(() => 0), // 에러 발생 시 0 반환
-      canSocial ? isLiked(postId, user.id, sessionTokens || undefined).catch(() => false) : Promise.resolve(false),
-      canSocial ? isBookmarked(postId, user.id, sessionTokens || undefined).catch(() => false) : Promise.resolve(false),
+      socialUserId ? isLiked(postId, socialUserId, sessionTokens || undefined).catch(() => false) : Promise.resolve(false),
+      socialUserId ? isBookmarked(postId, socialUserId, sessionTokens || undefined).catch(() => false) : Promise.resolve(false),
       post.whiskyId ? getWhiskyById(post.whiskyId).catch(() => null) : Promise.resolve(null)
     ]);
 

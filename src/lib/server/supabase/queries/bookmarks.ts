@@ -1,4 +1,4 @@
-import { createSupabaseClient, createSupabaseClientWithSession } from '../client.js';
+import { createSupabaseClientForSession } from '../client.js';
 import type { PostRow, Post } from '../types.js';
 import type { SessionTokens } from '../auth.js';
 import { mapRowToPost } from './posts.js';
@@ -17,9 +17,7 @@ export async function listBookmarkedPosts(
   sessionTokens?: SessionTokens
 ): Promise<Post[]> {
   try {
-    const supabase = sessionTokens
-      ? createSupabaseClientWithSession(sessionTokens)
-      : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
 
     let query = supabase
       .from('bookmarks')
@@ -55,9 +53,7 @@ export async function getBookmarkCount(
   sessionTokens?: SessionTokens
 ): Promise<number> {
   try {
-    const supabase = sessionTokens
-      ? createSupabaseClientWithSession(sessionTokens)
-      : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
 
     const { count, error } = await supabase
       .from('bookmarks')
@@ -81,9 +77,7 @@ export async function isBookmarked(
   sessionTokens?: SessionTokens
 ): Promise<boolean> {
   try {
-    const supabase = sessionTokens
-      ? createSupabaseClientWithSession(sessionTokens)
-      : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
 
     const { data, error } = await supabase
       .from('bookmarks')
@@ -115,9 +109,7 @@ export async function toggleBookmark(
   sessionTokens?: SessionTokens
 ): Promise<boolean> {
   try {
-    const supabase = sessionTokens
-      ? createSupabaseClientWithSession(sessionTokens)
-      : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
 
     const { data: existing, error: checkError } = await supabase
       .from('bookmarks')

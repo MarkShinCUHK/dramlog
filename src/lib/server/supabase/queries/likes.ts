@@ -1,4 +1,4 @@
-import { createSupabaseClient, createSupabaseClientWithSession } from '../client.js';
+import { createSupabaseClientForSession } from '../client.js';
 import type { SessionTokens } from '../auth.js';
 
 /**
@@ -6,9 +6,7 @@ import type { SessionTokens } from '../auth.js';
  */
 export async function getLikeCount(postId: string, sessionTokens?: SessionTokens): Promise<number> {
   try {
-    const supabase = sessionTokens
-      ? createSupabaseClientWithSession(sessionTokens)
-      : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
     
     const { count, error } = await supabase
       .from('likes')
@@ -44,9 +42,7 @@ export async function getLikeCount(postId: string, sessionTokens?: SessionTokens
  */
 export async function isLiked(postId: string, userId: string, sessionTokens?: SessionTokens): Promise<boolean> {
   try {
-    const supabase = sessionTokens
-      ? createSupabaseClientWithSession(sessionTokens)
-      : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
     
     const { data, error } = await supabase
       .from('likes')
@@ -87,9 +83,7 @@ export async function isLiked(postId: string, userId: string, sessionTokens?: Se
  */
 export async function toggleLike(postId: string, userId: string, sessionTokens?: SessionTokens): Promise<boolean> {
   try {
-    const supabase = sessionTokens
-      ? createSupabaseClientWithSession(sessionTokens)
-      : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
 
     // 현재 좋아요 상태 확인
     const { data: existingLike, error: checkError } = await supabase

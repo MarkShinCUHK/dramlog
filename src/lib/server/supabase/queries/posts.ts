@@ -1,4 +1,4 @@
-import { createSupabaseClient, createSupabaseClientWithSession } from '../client.js';
+import { createSupabaseClient, createSupabaseClientForSession } from '../client.js';
 import type { Post, PostRow } from '../types.js';
 import type { SessionTokens } from '../auth.js';
 import crypto from 'node:crypto';
@@ -459,9 +459,9 @@ export async function createPost(
 ): Promise<Post> {
   try {
     // 세션 토큰이 있으면 사용, 없으면 기본 클라이언트 사용
-    const supabase = accessToken
-      ? createSupabaseClientWithSession({ accessToken, refreshToken: '' })
-      : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(
+      accessToken ? { accessToken, refreshToken: '' } : null
+    );
 
     // edit_password가 있으면 익명 글, 없으면 로그인 글
     const isAnonymous = !!input.edit_password;
@@ -585,7 +585,7 @@ export async function updatePost(
   sessionTokens?: SessionTokens // Optional session tokens for RLS
 ): Promise<Post> {
   try {
-    const supabase = sessionTokens ? createSupabaseClientWithSession(sessionTokens) : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
 
     // 소유/비밀번호 검증을 위해 authRow 조회
     const { data: authRow, error: authError } = await supabase
@@ -687,7 +687,7 @@ export async function deletePost(
   sessionTokens?: SessionTokens // Optional session tokens for RLS
 ): Promise<void> {
   try {
-    const supabase = sessionTokens ? createSupabaseClientWithSession(sessionTokens) : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
 
     // 비밀번호 검증을 위해 해시 조회
     // (delete는 반환 row가 없을 수 있으므로 먼저 select)
@@ -777,9 +777,7 @@ export async function convertAnonymousPostsToUserPosts(
   sessionTokens?: SessionTokens
 ): Promise<number> {
   try {
-    const supabase = sessionTokens
-      ? createSupabaseClientWithSession(sessionTokens)
-      : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
 
     // 먼저 업데이트할 글들을 조회 (디버깅용)
     const { data: postsToUpdate, error: selectError } = await supabase

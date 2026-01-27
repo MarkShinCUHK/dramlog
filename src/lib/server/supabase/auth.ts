@@ -17,6 +17,13 @@ export type AuthUser = {
   isAnonymous?: boolean;
 };
 
+export type AuthContext = {
+  user: AuthUser | null;
+  session: SessionTokens | null;
+  isLoggedIn: boolean;
+  canSocial: boolean;
+};
+
 function cookieOptions() {
   return {
     path: '/',
@@ -115,6 +122,24 @@ export async function requireAuth(cookies: Cookies) {
 }
 
 /**
+ * 인증 컨텍스트 단일화
+ * - isLoggedIn: 익명 사용자를 제외한 로그인 상태
+ * - canSocial: 좋아요/북마크 등 소셜 기능 허용 여부
+ */
+export async function getAuthContext(cookies: Cookies): Promise<AuthContext> {
+  const [user, session] = await Promise.all([getUser(cookies), Promise.resolve(getSession(cookies))]);
+  const isLoggedIn = !!user && !user.isAnonymous;
+  const canSocial = isLoggedIn;
+
+  return {
+    user,
+    session,
+    isLoggedIn,
+    canSocial
+  };
+}
+
+/**
  * 사용자 또는 익명 사용자 가져오기 (세션이 없으면 익명 세션 생성)
  * 게시글 작성 등에서 익명 사용자도 인증된 사용자로 처리하기 위해 사용
  */
@@ -136,4 +161,3 @@ export async function getUserOrCreateAnonymous(cookies: Cookies): Promise<AuthUs
   
   return user;
 }
-

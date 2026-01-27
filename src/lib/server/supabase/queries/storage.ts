@@ -1,4 +1,4 @@
-import { createSupabaseClient, createSupabaseClientWithSession } from '../client.js';
+import { createSupabaseClientForSession } from '../client.js';
 import type { SessionTokens } from '../auth.js';
 import crypto from 'node:crypto';
 
@@ -78,9 +78,7 @@ export async function uploadImage(
     }
 
     // Supabase 클라이언트 생성 (세션 토큰이 있으면 사용)
-    const supabase = sessionTokens
-      ? createSupabaseClientWithSession(sessionTokens)
-      : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
 
     // 파일명 안전하게 처리
     const originalFileName = file.name || 'image.jpg';
@@ -156,9 +154,7 @@ export async function deleteImage(
   sessionTokens?: SessionTokens
 ): Promise<void> {
   try {
-    const supabase = sessionTokens
-      ? createSupabaseClientWithSession(sessionTokens)
-      : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
 
     const { error } = await supabase.storage
       .from(STORAGE_BUCKET)
@@ -184,9 +180,7 @@ export async function deletePostImages(
   sessionTokens?: SessionTokens
 ): Promise<void> {
   try {
-    const supabase = sessionTokens
-      ? createSupabaseClientWithSession(sessionTokens)
-      : createSupabaseClient();
+    const supabase = createSupabaseClientForSession(sessionTokens);
 
     // 폴더 내 모든 파일 목록 조회
     const { data: files, error: listError } = await supabase.storage

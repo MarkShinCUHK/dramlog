@@ -5,17 +5,7 @@ import { listWhiskies } from '$lib/server/supabase/queries/whiskies';
 import { getUser, getSession, getUserOrCreateAnonymous } from '$lib/server/supabase/auth';
 import { convertBlobUrlsToStorageUrlsWithMap } from '$lib/server/supabase/queries/images.js';
 import { deleteImage } from '$lib/server/supabase/queries/storage.js';
-
-function plainTextFromHtml(html: string) {
-  return (html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-function parseTags(value: string) {
-  return (value || '')
-    .split(',')
-    .map((tag) => tag.trim().replace(/^#/, ''))
-    .filter((tag) => tag.length > 0);
-}
+import { parseTags, validatePostInput } from '$lib/server/validation/posts';
 
 export const load: PageServerLoad = async ({ params, cookies }) => {
   try {
@@ -109,20 +99,7 @@ export const actions: Actions = {
       const user = await getUser(cookies);
       console.log('[EDIT] 사용자:', user ? (user.email || '익명') : '없음');
       const isOwner = !!user && !!post.userId && user.id === post.userId;
-
-      // 필드별 유효성 검사
-      const fieldErrors: Record<string, string> = {};
-      let hasErrors = false;
-
-      if (!title || title.trim().length === 0) {
-        fieldErrors.title = '제목을 입력해주세요.';
-        hasErrors = true;
-      }
-
-      if (!content || plainTextFromHtml(content).length === 0) {
-        fieldErrors.content = '내용을 입력해주세요.';
-        hasErrors = true;
-      }
+      const isLoggedIn = !!user && !user.isAnonymous && !!user.email;
 
       // 로그인 글: 작성자만 수정 가능 (비밀번호 없음)
       if (!isAnonymousPost && !isOwner) {
@@ -133,11 +110,22 @@ export const actions: Actions = {
       if (isAnonymousPost && user && user.email) {
         return fail(403, { error: '익명 게시글은 로그아웃 상태에서 비밀번호로만 수정할 수 있습니다.' });
       }
-      
-      if (isAnonymousPost && !editPassword) {
+
+      const { fieldErrors, hasErrors: initialHasErrors } = validatePostInput(
+        { title, content },
+        {
+          isLoggedIn,
+          isAnonymousPost,
+          editPassword,
+          requirePasswordConfirm: false
+        }
+      );
+
+      if (isAnonymousPost && (!editPassword || editPassword.length < 4)) {
         fieldErrors.editPassword = '비밀번호를 입력해주세요.';
-        hasErrors = true;
       }
+
+      const hasErrors = initialHasErrors || Object.keys(fieldErrors).length > 0;
 
       if (hasErrors) {
         return fail(400, {

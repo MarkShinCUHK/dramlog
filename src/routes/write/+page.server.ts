@@ -3,17 +3,7 @@ import { createPost } from '$lib/server/supabase/queries/posts';
 import { listWhiskies } from '$lib/server/supabase/queries/whiskies';
 import { getUser, getUserOrCreateAnonymous, getSession } from '$lib/server/supabase/auth';
 import { convertBlobUrlsToStorageUrls, convertBlobUrlsToStorageUrlsWithMap } from '$lib/server/supabase/queries/images.js';
-
-function plainTextFromHtml(html: string) {
-  return (html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-function parseTags(value: string): string[] {
-  return (value || '')
-    .split(',')
-    .map((tag) => tag.trim().replace(/^#/, ''))
-    .filter((tag) => tag.length > 0);
-}
+import { parseTags, validatePostInput } from '$lib/server/validation/posts';
 
 export const actions = {
   create: async ({ request, cookies }) => {
@@ -36,38 +26,20 @@ export const actions = {
       editPassword = formData.get('editPassword')?.toString() ?? '';
       editPasswordConfirm = formData.get('editPasswordConfirm')?.toString() ?? '';
 
-      // 필드별 유효성 검사
-      const fieldErrors: Record<string, string> = {};
-      let hasErrors = false;
-
-      if (!title || title.trim().length === 0) {
-        fieldErrors.title = '제목을 입력해주세요.';
-        hasErrors = true;
-      }
-
-      if (!content || plainTextFromHtml(content).length === 0) {
-        fieldErrors.content = '내용을 입력해주세요.';
-        hasErrors = true;
-      }
-
       // 익명 사용자도 세션을 가지도록 함 (RLS 정책 적용을 위해)
       const user = await getUserOrCreateAnonymous(cookies);
       const isLoggedIn = !user.isAnonymous && !!user.email;
 
-      if (!isLoggedIn) {
-        if (!editPassword || editPassword.length < 4) {
-          fieldErrors.editPassword = '비밀번호는 4자 이상으로 입력해주세요.';
-          hasErrors = true;
+      const { fieldErrors, hasErrors } = validatePostInput(
+        { title, content },
+        {
+          isLoggedIn,
+          isAnonymousPost: !isLoggedIn,
+          editPassword,
+          editPasswordConfirm,
+          requirePasswordConfirm: true
         }
-
-        if (!editPasswordConfirm) {
-          fieldErrors.editPasswordConfirm = '비밀번호 확인을 입력해주세요.';
-          hasErrors = true;
-        } else if (editPassword && editPassword !== editPasswordConfirm) {
-          fieldErrors.editPasswordConfirm = '비밀번호 확인이 일치하지 않습니다.';
-          hasErrors = true;
-        }
-      }
+      );
 
       if (hasErrors) {
         return fail(400, {
