@@ -50,6 +50,18 @@
 - **SvelteKit stores**: `$page`, `$navigating` 등은 그대로 사용 가능 (변경 없음)
 - **서버 사이드 코드**: `+page.server.ts` 등은 변경 없음
 
+## Svelte MCP 사용 규칙 (필수)
+- **MCP 서버 이름**: `sveltekit` (Remote MCP `https://mcp.svelte.dev/mcp`)
+- **문서 조회 절차**:
+  - Svelte / SvelteKit 관련 작업을 시작할 때 **항상** `mcp_sveltekit_list-sections`(list-sections)로 관련 섹션 후보를 조회한다.
+  - 필요한 섹션이 보이면 `mcp_sveltekit_get-documentation`(get-documentation)을 한 번에 여러 개 요청해서 **관련 문서를 모두 가져온 뒤** 작업한다.
+- **코드 작성 규칙**:
+  - 새 Svelte 컴포넌트나 기존 컴포넌트 수정 후에는 **반드시** `mcp_sveltekit_svelte-autofixer`(svelte-autofixer)를 호출해 정적 분석/수정을 수행한다.
+  - `svelte-autofixer`가 이슈를 보고하면, 제안 사항을 반영한 뒤 **다시 호출해서 더 이상 이슈가 없을 때까지 반복**한다.
+- **Playground 사용**:
+  - 사용자에게 코드 예시만 보여줄 때, 원하면 `mcp_sveltekit_playground-link`(playground-link)를 사용해 Svelte Playground 링크를 생성할 수 있다.
+  - **프로젝트 실제 파일에 이미 코드를 작성한 경우**에는 playground-link를 사용하지 않고, 로컬 코드 기준으로만 작업한다.
+
 ## TipTap Rich Text Editor 규칙 (필수)
 - **공식 문서 패턴 준수**: TipTap 공식 문서의 Svelte 통합 가이드를 따라야 함
   - 참고: https://tiptap.dev/docs/editor/getting-started/install/svelte
@@ -480,6 +492,8 @@ src/
 - **보안**: ANON_KEY는 RLS로 제어되므로 안전하지만, Service Role Key는 절대 사용하지 않음
 - **세션 토큰**: RLS 정책 적용을 위해 `createSupabaseClientWithSession()` 함수 사용 (SessionTokens 객체 전달)
 - **OAuth 로그인**: `signInWithOAuth` → `/auth/callback`에서 `exchangeCodeForSession`로 세션 교환 후 쿠키 설정
+- **OAuth PKCE (SSR 필수)**: `@supabase/ssr`의 `createServerClient`를 사용해 code verifier를 쿠키에 저장/복원
+- **OAuth redirectTo**: 허용 목록과 정확히 일치해야 하므로 쿼리 파라미터를 붙이지 않음 (필요 시 next는 쿠키로 전달)
 - **Supabase Storage** (이미지 업로드):
   - ✅ Storage 버킷: `post-images` (공개 버킷)
   - ✅ RLS 정책: 읽기(모든 사용자), 쓰기(인증된 사용자), 삭제(업로드한 사용자)

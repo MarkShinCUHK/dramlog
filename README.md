@@ -12,7 +12,7 @@ SvelteKit (Svelte 5) + Tailwind CSS 기반의 위스키 리뷰 및 게시글 커
 ## ☁️ 배포 (Vercel)
 
 ### 현재 배포 도메인
-- Production: `https://whiskylog-topaz.vercel.app`
+- Production: `https://dramlog-topaz.vercel.app`
 
 ### 배포 방식
 - GitHub `main` 브랜치에 push하면 **Vercel이 자동으로 Production 배포**합니다.
@@ -25,10 +25,11 @@ SvelteKit (Svelte 5) + Tailwind CSS 기반의 위스키 리뷰 및 게시글 커
 
 ### Supabase Auth 설정 (배포 도메인 반영)
 Supabase 대시보드 → Authentication → URL Configuration
-- **Site URL**: `https://whiskylog-topaz.vercel.app`
+- **Site URL**: `https://dramlog-topaz.vercel.app`
 - **Redirect URLs**:
-  - `https://whiskylog-topaz.vercel.app/*`
-  - `https://*.vercel.app/*` (Preview 도메인까지 사용할 경우)
+  - `https://dramlog-topaz.vercel.app/auth/callback`
+  - `https://*.vercel.app/auth/callback` (Preview 도메인까지 사용할 경우)
+  - `http://localhost:5173/auth/callback` (로컬 개발)
 
 ### 설치 및 실행
 
@@ -88,9 +89,12 @@ where key = 'anon_post_secret';
 8. (선택) Google OAuth 로그인
    - Supabase Auth Providers에서 Google 활성화
    - Google Cloud에서 OAuth 클라이언트 생성 후 Redirect URI에 Supabase 콜백 추가
+     - `https://<프로젝트-레퍼런스>.supabase.co/auth/v1/callback`
    - Supabase Auth Redirect URLs에 앱 콜백 등록
      - `http://localhost:5173/auth/callback`
      - `https://<프로덕션-도메인>/auth/callback`
+   - **SvelteKit SSR**에서는 `@supabase/ssr`의 `createServerClient`를 사용해 PKCE code verifier를 쿠키에 저장해야 함
+   - `redirectTo`는 허용 목록과 정확히 일치해야 하므로 쿼리 파라미터를 붙이지 않음 (필요 시 쿠키로 next 전달)
 
 ### 빌드
 

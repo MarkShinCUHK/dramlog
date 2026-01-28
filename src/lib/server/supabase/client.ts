@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { createServerClient } from '@supabase/ssr';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import type { Cookies } from '@sveltejs/kit';
 
@@ -50,41 +51,25 @@ export function createSupabaseClientForSession(sessionTokens?: { accessToken: st
   return sessionTokens ? createSupabaseClientWithSession(sessionTokens) : createSupabaseClient();
 }
 
-function cookieOptions() {
-  return {
-    path: '/',
-    httpOnly: true,
-    sameSite: 'lax' as const,
-    secure: process.env.NODE_ENV === 'production'
-  };
-}
-
-function createCookieStorage(cookies: Cookies) {
-  return {
-    getItem(key: string) {
-      return cookies.get(key) ?? null;
-    },
-    setItem(key: string, value: string) {
-      cookies.set(key, value, cookieOptions());
-    },
-    removeItem(key: string) {
-      cookies.delete(key, { path: '/' });
-    }
-  };
-}
-
 /**
  * OAuth 전용 Supabase 클라이언트 (PKCE + 쿠키 스토리지)
  * - code_verifier를 쿠키에 저장해 콜백에서 교환 가능하게 함
  */
 export function createSupabaseAuthClient(cookies: Cookies) {
-  return createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
-    auth: {
-      flowType: 'pkce',
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-      storage: createCookieStorage(cookies)
+  return createServerClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
+    cookies: {
+      getAll() {
+        return cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          cookies.set(name, value, {
+            path: '/',
+            ...options,
+            secure: options?.secure ?? process.env.NODE_ENV === 'production'
+          });
+        });
+      }
     }
   });
 }

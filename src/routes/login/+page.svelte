@@ -62,7 +62,7 @@
       <div class="h-px flex-1 bg-gray-200"></div>
     </div>
 
-    <form method="POST" action="/login" data-sveltekit-reload>
+    <form method="POST" action="?/login" data-sveltekit-reload>
       <div class="mb-5">
         <label for="email" class="block text-sm font-medium text-gray-700 mb-2">이메일</label>
         <input
