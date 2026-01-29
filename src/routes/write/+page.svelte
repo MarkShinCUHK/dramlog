@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { PUBLIC_TURNSTILE_SITE_KEY } from '$env/static/public';
+  import { PUBLIC_TURNSTILE_SITE_KEY } from '$env/dynamic/public';
   import { page } from '$app/stores';
   import { resolve } from '$app/paths';
   import { showToast } from '$lib/stores/toast';
