@@ -350,7 +350,7 @@
           <button
             type="button"
             onclick={() => startQuiz('full')}
-            class="inline-flex min-h-[64px] items-center justify-center rounded-2xl bg-whiskey-900 px-6 py-5 text-base font-semibold text-white shadow hover:bg-whiskey-800"
+            class="inline-flex min-h-[64px] items-center justify-center rounded-2xl bg-whiskey-600 px-6 py-5 text-base font-semibold text-white shadow hover:bg-whiskey-700"
           >
             40문항 · 약 5분 소요
           </button>
@@ -386,7 +386,7 @@
         <button
           type="button"
           onclick={() => handleAnswer(activeQuestions[currentIndex].b.axis)}
-          class="rounded-2xl border border-gray-200 bg-white px-6 py-4 text-lg font-semibold text-gray-700 shadow-sm hover:border-gray-400 hover:bg-gray-50"
+          class="rounded-2xl border border-whiskey-200 bg-white px-6 py-4 text-lg font-semibold text-whiskey-800 shadow-sm hover:border-whiskey-400 hover:bg-whiskey-50"
         >
           {activeQuestions[currentIndex]?.b.text}
         </button>
