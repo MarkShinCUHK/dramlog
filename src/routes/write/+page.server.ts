@@ -1,9 +1,33 @@
 import { fail, redirect } from '@sveltejs/kit';
+import { TURNSTILE_SECRET_KEY } from '$env/static/private';
 import { createPost } from '$lib/server/supabase/queries/posts';
 import { listWhiskies } from '$lib/server/supabase/queries/whiskies';
-import { getUser, getUserOrCreateAnonymous, getSession } from '$lib/server/supabase/auth';
+import { getUserOrCreateAnonymous, getSession } from '$lib/server/supabase/auth';
 import { convertBlobUrlsToStorageUrls, convertBlobUrlsToStorageUrlsWithMap } from '$lib/server/supabase/queries/images.js';
 import { parseTags, validatePostInput, validateTastingInput } from '$lib/server/validation/posts';
+
+type TurnstileResult = {
+  success: boolean;
+  'error-codes'?: string[];
+};
+
+const TURNSTILE_VERIFY_ENDPOINT = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
+
+async function verifyTurnstile(token: string, remoteIp?: string | null) {
+  const body = new URLSearchParams();
+  body.set('secret', TURNSTILE_SECRET_KEY);
+  body.set('response', token);
+  if (remoteIp) {
+    body.set('remoteip', remoteIp);
+  }
+
+  const response = await fetch(TURNSTILE_VERIFY_ENDPOINT, {
+    method: 'POST',
+    body
+  });
+
+  return (await response.json()) as TurnstileResult;
+}
 
 export const actions = {
   create: async ({ request, cookies }) => {
@@ -33,10 +57,60 @@ export const actions = {
       finish = formData.get('finish')?.toString() ?? '0';
       editPassword = formData.get('editPassword')?.toString() ?? '';
       editPasswordConfirm = formData.get('editPasswordConfirm')?.toString() ?? '';
+      const turnstileToken = formData.get('cf-turnstile-response')?.toString() ?? '';
 
       // 익명 사용자도 세션을 가지도록 함 (RLS 정책 적용을 위해)
       const user = await getUserOrCreateAnonymous(cookies);
       const isLoggedIn = !user.isAnonymous && !!user.email;
+
+      if (!isLoggedIn) {
+        if (!TURNSTILE_SECRET_KEY) {
+          return fail(500, {
+            error: '로봇 방지 설정이 누락되었습니다. 관리자에게 문의해주세요.'
+          });
+        }
+
+        if (!turnstileToken) {
+          return fail(400, {
+            error: '로봇 방지 확인이 필요합니다.',
+            fieldErrors: { turnstile: '로봇 방지 확인을 완료해주세요.' },
+            values: {
+              title: title || '',
+              content: content || '',
+              author: author || '',
+              tags: tags || '',
+              whiskyId: whiskyId || '',
+              thumbnailUrl: thumbnailUrl || '',
+              color,
+              nose,
+              palate,
+              finish
+            }
+          });
+        }
+
+        const forwardedIp = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for');
+        const remoteIp = forwardedIp ? forwardedIp.split(',')[0]?.trim() : undefined;
+        const turnstileResult = await verifyTurnstile(turnstileToken, remoteIp);
+        if (!turnstileResult.success) {
+          return fail(400, {
+            error: '로봇 방지 확인에 실패했습니다.',
+            fieldErrors: { turnstile: '로봇 방지 확인을 다시 진행해주세요.' },
+            values: {
+              title: title || '',
+              content: content || '',
+              author: author || '',
+              tags: tags || '',
+              whiskyId: whiskyId || '',
+              thumbnailUrl: thumbnailUrl || '',
+              color,
+              nose,
+              palate,
+              finish
+            }
+          });
+        }
+      }
 
       const { fieldErrors, hasErrors: baseHasErrors } = validatePostInput(
         { title, content },

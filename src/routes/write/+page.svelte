@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { PUBLIC_TURNSTILE_SITE_KEY } from '$env/static/public';
   import { page } from '$app/stores';
+  import { resolve } from '$app/paths';
   import { showToast } from '$lib/stores/toast';
   import RichTextEditor from '$lib/components/RichTextEditor.svelte';
   import StarRating from '$lib/components/StarRating.svelte';
@@ -23,6 +25,7 @@
   };
 
   let { form, data }: { form?: FormState; data?: { whiskies?: Array<{ id: string; name: string; brand?: string | null }> } } = $props();
+  const turnstileSiteKey = PUBLIC_TURNSTILE_SITE_KEY;
   
   let title = $state('');
   let content = $state('');
@@ -181,6 +184,26 @@
 
     const formData = new FormData();
 
+    if (!isLoggedIn) {
+      const turnstileInput = document.querySelector(
+        'input[name="cf-turnstile-response"], textarea[name="cf-turnstile-response"]'
+      ) as HTMLInputElement | HTMLTextAreaElement | null;
+      const turnstileToken = turnstileInput?.value ?? '';
+
+      if (!turnstileToken) {
+        clientFieldErrors = { ...clientFieldErrors, turnstile: '로봇 방지 확인을 완료해주세요.' };
+        showToast('로봇 방지 확인이 필요합니다.', 'error');
+        return;
+      }
+
+      if (clientFieldErrors.turnstile) {
+        clientFieldErrors = { ...clientFieldErrors };
+        delete clientFieldErrors.turnstile;
+      }
+
+      formData.append('cf-turnstile-response', turnstileToken);
+    }
+
     // 텍스트 필드
     formData.append('title', title);
     formData.append('content', content);
@@ -279,6 +302,9 @@
 
 <svelte:head>
   <title>글 작성 - whiskylog</title>
+  {#if !isLoggedIn && turnstileSiteKey}
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  {/if}
 </svelte:head>
 
 <div class="max-w-4xl xl:max-w-5xl mx-auto px-4 xl:px-8 py-12">
@@ -371,7 +397,7 @@
         class="w-full px-4 py-3 sm:py-2.5 border {allFieldErrors.whiskyId ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-whiskey-500 focus:border-whiskey-500 outline-none transition-colors"
       >
         <option value="" disabled hidden>선택해주세요</option>
-        {#each data?.whiskies || [] as whisky}
+        {#each data?.whiskies || [] as whisky (whisky.id)}
           <option value={whisky.id}>
             {whisky.brand ? `${whisky.brand} - ${whisky.name}` : whisky.name}
           </option>
@@ -449,7 +475,7 @@
           대표 이미지 선택
         </legend>
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {#each imageCandidates as imageUrl}
+          {#each imageCandidates as imageUrl (imageUrl)}
             <button
               type="button"
               class="group relative overflow-hidden rounded-xl border {thumbnailUrl === imageUrl ? 'border-whiskey-500 ring-2 ring-whiskey-300' : 'border-gray-200'}"
@@ -514,6 +540,23 @@
       </div>
 
       <div class="mb-8">
+        <div class="flex items-center justify-between gap-3">
+          <p class="block text-sm font-medium text-gray-700">로봇 방지 확인</p>
+          <span class="text-xs text-gray-400">익명 글 작성 시 필요</span>
+        </div>
+        <div class="mt-3 rounded-xl border border-gray-200 bg-white/90 p-4">
+          {#if turnstileSiteKey}
+            <div class="cf-turnstile" data-sitekey={turnstileSiteKey}></div>
+          {:else}
+            <p class="text-sm text-red-600">Turnstile 설정이 필요합니다. 관리자에게 문의해주세요.</p>
+          {/if}
+        </div>
+        {#if allFieldErrors.turnstile}
+          <p class="mt-2 text-sm text-red-600">{allFieldErrors.turnstile}</p>
+        {/if}
+      </div>
+
+      <div class="mb-8">
         <label for="editPasswordConfirm" class="block text-sm font-medium text-gray-700 mb-2">
           비밀번호 확인
         </label>
@@ -549,7 +592,7 @@
     <!-- 버튼 -->
     <div class="flex flex-col sm:flex-row gap-3 sm:justify-end pt-6 border-t border-gray-200">
       <a
-        href="/posts"
+        href={resolve('/posts')}
         class="inline-flex items-center justify-center px-6 py-3 min-h-[44px] bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium ring-1 ring-black/10 shadow-sm hover:shadow"
       >
         취소
