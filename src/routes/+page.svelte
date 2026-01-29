@@ -2,6 +2,7 @@
   import { invalidateAll } from '$app/navigation';
   import { page } from '$app/stores';
   import { browser } from '$app/environment';
+  import { resolve } from '$app/paths';
 
   // 로그아웃 후 리다이렉트 시 데이터 갱신 (브라우저에서만 실행)
   $effect(() => {
@@ -64,7 +65,7 @@
     <div class="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3">
       <!-- 게시글 목록 -->
       <a
-        href="/posts"
+        href={resolve('/posts')}
         class="group bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg hover:border-whiskey-300 transition-all"
       >
         <div class="flex items-center gap-4 mb-4">
@@ -84,7 +85,7 @@
 
       <!-- 글 작성 -->
       <a
-        href="/write"
+        href={resolve('/write')}
         class="group bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg hover:border-whiskey-300 transition-all"
       >
         <div class="flex items-center gap-4 mb-4">
@@ -104,7 +105,7 @@
 
       <!-- DB 보기 -->
       <a
-        href="/whiskies"
+        href={resolve('/whiskies')}
         class="group bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg hover:border-whiskey-300 transition-all"
       >
         <div class="flex items-center gap-4 mb-4">
@@ -124,7 +125,7 @@
 
       <!-- 문의 -->
       <a
-        href="/contact"
+        href={resolve('/contact')}
         class="group bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg hover:border-whiskey-300 transition-all"
       >
         <div class="flex items-center gap-4 mb-4">
@@ -139,6 +140,26 @@
         </div>
         <p class="text-gray-600 text-sm">
           제안/버그 제보/협업 문의를 남겨주세요.
+        </p>
+      </a>
+
+      <!-- WBTI 테스트 -->
+      <a
+        href={resolve('/wbti')}
+        class="group bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg hover:border-whiskey-300 transition-all"
+      >
+        <div class="flex items-center gap-4 mb-4">
+          <div class="w-12 h-12 rounded-lg bg-whiskey-100 flex items-center justify-center group-hover:bg-whiskey-200 transition-colors">
+            <svg class="w-6 h-6 text-whiskey-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12m6-6H6" />
+            </svg>
+          </div>
+          <h2 class="text-xl font-bold text-gray-900 group-hover:text-whiskey-600 transition-colors">
+            WBTI 테스트
+          </h2>
+        </div>
+        <p class="text-gray-600 text-sm">
+          2분만에 나의 위스키 성향을 확인해보세요.
         </p>
       </a>
     </div>
