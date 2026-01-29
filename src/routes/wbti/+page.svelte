@@ -9,8 +9,14 @@
   type Question = {
     id: number;
     text: string;
-    yes: Axis;
-    no: Axis;
+    a: {
+      text: string;
+      axis: Axis;
+    };
+    b: {
+      text: string;
+      axis: Axis;
+    };
   };
 
   const questions = questionsData as Question[];
@@ -372,17 +378,17 @@
       <div class="grid gap-3 sm:grid-cols-2">
         <button
           type="button"
-          onclick={() => handleAnswer(activeQuestions[currentIndex].yes)}
+          onclick={() => handleAnswer(activeQuestions[currentIndex].a.axis)}
           class="rounded-2xl border border-whiskey-200 bg-white px-6 py-4 text-lg font-semibold text-whiskey-800 shadow-sm hover:border-whiskey-400 hover:bg-whiskey-50"
         >
-          Yes
+          {activeQuestions[currentIndex]?.a.text}
         </button>
         <button
           type="button"
-          onclick={() => handleAnswer(activeQuestions[currentIndex].no)}
+          onclick={() => handleAnswer(activeQuestions[currentIndex].b.axis)}
           class="rounded-2xl border border-gray-200 bg-white px-6 py-4 text-lg font-semibold text-gray-700 shadow-sm hover:border-gray-400 hover:bg-gray-50"
         >
-          No
+          {activeQuestions[currentIndex]?.b.text}
         </button>
       </div>
 
