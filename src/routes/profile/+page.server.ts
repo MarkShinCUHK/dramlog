@@ -1,6 +1,6 @@
 import { fail } from '@sveltejs/kit';
 import { requireAuth, getSession } from '$lib/server/supabase/auth';
-import { getProfile, upsertProfile } from '$lib/server/supabase/queries/profiles';
+import { getProfile, isNicknameAvailable, upsertProfile } from '$lib/server/supabase/queries/profiles';
 import { createSupabaseClientForSession } from '$lib/server/supabase/client';
 import { deleteStoragePublicUrl, uploadAvatar } from '$lib/server/supabase/queries/storage';
 
@@ -27,6 +27,51 @@ export async function load({ cookies }) {
 }
 
 export const actions = {
+  checkNickname: async ({ request, cookies }) => {
+    const user = await requireAuth(cookies);
+    const sessionTokens = getSession(cookies);
+    if (!sessionTokens) {
+      return fail(401, { error: '로그인 세션이 없습니다.' });
+    }
+
+    const formData = await request.formData();
+    const nickname = formData.get('nickname')?.toString().trim() || '';
+    const bio = formData.get('bio')?.toString().trim() || '';
+    const avatarUrl = formData.get('avatarUrl')?.toString().trim() || '';
+
+    if (nickname.length < 2 || nickname.length > 20) {
+      return fail(400, {
+        error: '닉네임은 2~20자로 입력해주세요.',
+        nicknameStatus: 'invalid',
+        values: { nickname, bio, avatarUrl }
+      });
+    }
+
+    const currentProfile = await getProfile(user.id, sessionTokens);
+    if (currentProfile?.nickname && currentProfile.nickname === nickname) {
+      return {
+        nicknameStatus: 'current',
+        nicknameMessage: '현재 사용 중인 닉네임입니다.',
+        values: { nickname, bio, avatarUrl }
+      };
+    }
+
+    const available = await isNicknameAvailable(nickname, user.id, sessionTokens);
+    if (!available) {
+      return fail(400, {
+        error: '이미 사용 중인 닉네임입니다.',
+        nicknameStatus: 'taken',
+        nicknameMessage: '이미 사용 중인 닉네임입니다.',
+        values: { nickname, bio, avatarUrl }
+      });
+    }
+
+    return {
+      nicknameStatus: 'available',
+      nicknameMessage: '이 닉네임으로 변경 가능합니다.',
+      values: { nickname, bio, avatarUrl }
+    };
+  },
   update: async ({ request, cookies }) => {
     const user = await requireAuth(cookies);
     const sessionTokens = getSession(cookies);
@@ -43,8 +88,23 @@ export const actions = {
     if (nickname.length < 2 || nickname.length > 20) {
       return fail(400, {
         error: '닉네임은 2~20자로 입력해주세요.',
+        nicknameStatus: 'invalid',
+        nicknameMessage: '닉네임은 2~20자로 입력해주세요.',
         values: { nickname, bio, avatarUrl }
       });
+    }
+
+    const currentProfile = await getProfile(user.id, sessionTokens);
+    if (!currentProfile || currentProfile.nickname !== nickname) {
+      const available = await isNicknameAvailable(nickname, user.id, sessionTokens);
+      if (!available) {
+        return fail(400, {
+          error: '이미 사용 중인 닉네임입니다.',
+          nicknameStatus: 'taken',
+          nicknameMessage: '이미 사용 중인 닉네임입니다.',
+          values: { nickname, bio, avatarUrl }
+        });
+      }
     }
 
     if (avatarUrl && !(avatarFile instanceof File && avatarFile.size > 0) && !isHttpUrl(avatarUrl)) {

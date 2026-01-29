@@ -380,6 +380,9 @@ src/
    - **브라우저 자동완성 방지**:
      - ✅ `autocomplete` 속성 추가 (`excerpt`: `off`, `editPassword`: `new-password`, `editPasswordConfirm`: `new-password`)
      - ✅ 로그인 정보가 게시글 작성 폼에 자동 채워지는 문제 해결
+   - **프로필 UX 개선**:
+     - ✅ 닉네임 중복 확인 버튼 추가
+     - ✅ WBTI 프로필 표시 및 테스트 연결
    - **페이지네이션**:
      - ✅ 게시글 목록 페이지네이션: 12개/페이지 (`/posts`, `/my-posts`, `/search`)
      - ✅ 쿼리 함수: `listPosts(limit, offset)`, `getPostCount()` 등
@@ -548,4 +551,4 @@ src/
 
 ## 추가 참조
 - 상세 가이드라인: `web-dev-guidelines.md` 참조
-- 마지막 업데이트: 2026-01-29 (익명 글 Turnstile 검증 추가)
+- 마지막 업데이트: 2026-01-29 (프로필 닉네임 중복 확인 + WBTI 연동)

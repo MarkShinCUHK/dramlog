@@ -280,6 +280,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   nickname TEXT,
   bio TEXT,
   avatar_url TEXT,
+  wbti_code TEXT,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 

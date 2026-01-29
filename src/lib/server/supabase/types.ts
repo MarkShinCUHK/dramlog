@@ -156,6 +156,7 @@ export type ProfileRow = {
   nickname?: string | null;
   bio?: string | null;
   avatar_url?: string | null;
+  wbti_code?: string | null;
   updated_at: string; // ISO 8601 timestamptz
 };
 
@@ -164,6 +165,7 @@ export type Profile = {
   nickname: string | null;
   bio: string | null;
   avatarUrl: string | null;
+  wbtiCode: string | null;
   updatedAt: string;
 };
 

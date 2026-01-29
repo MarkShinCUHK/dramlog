@@ -1,9 +1,13 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
+
   let { data, form } = $props();
 
   type FormState = {
     error?: string;
     success?: boolean;
+    nicknameStatus?: 'available' | 'taken' | 'invalid' | 'current';
+    nicknameMessage?: string;
     values?: {
       nickname?: string;
       bio?: string;
@@ -18,11 +22,15 @@
   let avatarFileName = $state('');
   let error = $state('');
   let success = $state(false);
+  let nicknameStatus = $state<FormState['nicknameStatus']>(undefined);
+  let nicknameMessage = $state('');
+  let wbtiCode = $state<string | null>(null);
 
   $effect(() => {
     nickname = data.profile?.nickname || data.user?.nickname || '';
     bio = data.profile?.bio || '';
     avatarUrl = data.profile?.avatarUrl || '';
+    wbtiCode = data.profile?.wbtiCode || null;
     avatarPreviewUrl = avatarUrl;
     avatarFileName = '';
 
@@ -33,6 +41,8 @@
     avatarPreviewUrl = avatarUrl;
     if (formState?.error !== undefined) error = formState.error || '';
     if (formState?.success) success = true;
+    nicknameStatus = formState?.nicknameStatus;
+    nicknameMessage = formState?.nicknameMessage || '';
   });
 
   async function resizeImageToSquare(file: File, size = 256): Promise<File> {
@@ -168,9 +178,18 @@
     </div>
 
     <div class="mb-6">
-      <label for="nickname" class="block text-sm font-medium text-gray-700 mb-2">
-        닉네임
-      </label>
+      <div class="flex items-center justify-between gap-3 mb-2">
+        <label for="nickname" class="block text-sm font-medium text-gray-700">
+          닉네임
+        </label>
+        <button
+          type="submit"
+          formaction="?/checkNickname"
+          class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-whiskey-300 hover:text-whiskey-700"
+        >
+          변경 가능 확인
+        </button>
+      </div>
       <input
         id="nickname"
         name="nickname"
@@ -181,7 +200,50 @@
         required
         class="w-full px-4 py-3 sm:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-whiskey-500 focus:border-whiskey-500 outline-none transition-colors"
       />
-      <p class="mt-2 text-sm text-gray-500">닉네임은 게시글 작성자명에 반영됩니다.</p>
+      {#if nicknameMessage}
+        <p
+          class="mt-2 text-sm {nicknameStatus === 'available' || nicknameStatus === 'current' ? 'text-green-700' : 'text-red-600'}"
+        >
+          {nicknameMessage}
+        </p>
+      {:else}
+        <p class="mt-2 text-sm text-gray-500">닉네임은 게시글 작성자명에 반영됩니다.</p>
+      {/if}
+    </div>
+
+    <div class="mb-6 rounded-2xl bg-white/80 p-5 ring-1 ring-black/5">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <h3 class="text-sm font-semibold text-gray-700">WBTI</h3>
+          <details class="relative group">
+            <summary class="list-none cursor-pointer inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 text-xs text-gray-500 hover:text-whiskey-700">
+              ?
+            </summary>
+            <div class="absolute left-0 top-8 z-10 w-72 rounded-xl border border-gray-200 bg-white p-4 text-xs text-gray-600 shadow-lg">
+              <p class="font-semibold text-gray-700 mb-2">WBTI 축 설명</p>
+              <ul class="space-y-1">
+                <li>F/E: 익숙한 선택 ↔ 새로운 탐험</li>
+                <li>C/I: 캐주얼 ↔ 몰입</li>
+                <li>S/N: 감각 ↔ 서사</li>
+                <li>H/P: 공유 ↔ 개인</li>
+              </ul>
+            </div>
+          </details>
+        </div>
+        <a
+          href={resolve('/wbti')}
+          class="inline-flex items-center justify-center rounded-lg bg-whiskey-600 px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-whiskey-700"
+        >
+          WBTI 테스트
+        </a>
+      </div>
+      <div class="mt-3 text-sm text-gray-700">
+        {#if wbtiCode}
+          현재 WBTI: <span class="font-semibold text-gray-900">{wbtiCode}</span>
+        {:else}
+          아직 WBTI가 등록되지 않았습니다.
+        {/if}
+      </div>
     </div>
 
     <div class="mb-8">

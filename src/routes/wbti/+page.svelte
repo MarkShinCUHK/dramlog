@@ -1,6 +1,9 @@
 <script lang="ts">
+  import { page } from '$app/stores';
   import { resolve } from '$app/paths';
   import questionsData from '$lib/data/wbti-questions.json';
+
+  let { form } = $props();
 
   type Axis = 'F' | 'E' | 'C' | 'I' | 'S' | 'N' | 'H' | 'P';
   type Stage = 'intro' | 'quiz' | 'result';
@@ -236,6 +239,7 @@
   );
 
   let profile = $derived.by(() => profiles[resultCode]);
+  let isLoggedIn = $derived(!!$page.data?.user);
 
   let nickname = $derived.by(() => {
     if (profile?.nickname) return profile.nickname;
@@ -463,6 +467,24 @@
       </div>
 
       <div class="flex flex-col sm:flex-row gap-3">
+        {#if isLoggedIn}
+          <form method="POST" action="?/setWbti">
+            <input type="hidden" name="wbtiCode" value={resultCode} />
+            <button
+              type="submit"
+              class="inline-flex items-center justify-center rounded-lg bg-whiskey-600 px-6 py-3 text-white font-semibold shadow hover:bg-whiskey-700"
+            >
+              내 WBTI로 등록하기
+            </button>
+          </form>
+        {:else}
+          <a
+            href={resolve('/login')}
+            class="inline-flex items-center justify-center rounded-lg bg-whiskey-600 px-6 py-3 text-white font-semibold shadow hover:bg-whiskey-700"
+          >
+            로그인하고 WBTI 등록하기
+          </a>
+        {/if}
         <button
           type="button"
           onclick={restart}
@@ -472,11 +494,21 @@
         </button>
         <a
           href={resolve('/')}
-          class="inline-flex items-center justify-center rounded-lg bg-whiskey-600 px-6 py-3 text-white font-semibold shadow hover:bg-whiskey-700"
+          class="inline-flex items-center justify-center rounded-lg border border-gray-200 px-6 py-3 text-gray-700 font-semibold hover:bg-gray-50"
         >
           메인으로 돌아가기
         </a>
       </div>
+      {#if form?.error}
+        <div class="rounded-2xl bg-red-50/80 p-4 text-sm text-red-700 ring-1 ring-red-200">
+          {form.error}
+        </div>
+      {/if}
+      {#if form?.wbtiSaved}
+        <div class="rounded-2xl bg-green-50/80 p-4 text-sm text-green-700 ring-1 ring-green-200">
+          WBTI가 프로필에 저장되었습니다.
+        </div>
+      {/if}
     </section>
   {/if}
 </div>
